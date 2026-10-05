@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import Module from 'manifold-3d';
 import { audit, weld, dropDegenerate, volume } from '../src/mesh.js';
-import { tile, fromManifold } from '../src/engine.js';
+import { tile, fromManifold, layerPath } from '../src/engine.js';
 import { parseSTL, parse3MF, parseGLB } from '../src/parsers.js';
 import { writeSTL, write3MF } from '../src/export.js';
 
@@ -117,4 +117,26 @@ test('real centrepiece (if present): 25 closed tiles', { skip: !existsSync(REAL)
   const r = tile(wasm, mesh, { bed: [220, 220, 250], margin: 10 });
   assert.equal(r.tiles.length, 25);
   assert.equal(r.allOk, true);
+});
+
+test('hollow: 3 mm open-bottom shell is closed, keeps the outer surface, and is much lighter', () => {
+  const mesh = terrainDisc(120, 20, 10, 8);
+  const r = tile(wasm, mesh, { bed: [220, 220, 250], margin: 10, hollow: { wall: 3, openBottom: true } });
+  assert.equal(r.tiles.length, 4);
+  for (const t of r.tiles) {
+    assert.equal(t.audit.ok, true, t.name);
+    assert.ok(t.shellVolume < 0.6 * t.volume, `${t.name} shell ${t.shellVolume} vs solid ${t.volume}`);
+    assert.ok(t.bounds.size[2] > 20, 'height must survive hollowing');
+  }
+  assert.equal(r.allOk, true, 'solid volumes still sum to the source');
+  assert.ok(r.printVolume < r.tileVolume);
+});
+
+test('layerPath: perimeters and infill at mid-height of a cube', () => {
+  const c = wasm.Manifold.cube([40, 40, 10], false);
+  const L = layerPath(wasm, c, 5, { walls: 2, lineWidth: 0.4, infill: 0.2 });
+  assert.equal(L.perims.length, 2);
+  assert.ok(L.infill.length > 0 && L.infill.length % 4 === 0);
+  // every infill segment lies inside the inner region (40 - 2*0.8 = 38.4 wide)
+  for (let i = 0; i < L.infill.length; i += 4) for (const x of [L.infill[i], L.infill[i + 2]]) assert.ok(x > 0.7 && x < 39.3);
 });

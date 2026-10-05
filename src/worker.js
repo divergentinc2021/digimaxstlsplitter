@@ -2,13 +2,14 @@
 import Module from 'manifold-3d';
 import { parseAny } from './parsers.js';
 import { audit, bounds, dropDegenerate, orient, translate, volume } from './mesh.js';
-import { tile } from './engine.js';
+import { tile, toManifold, layerPath } from './engine.js';
 import { zipTiles, writeSTL, write3MF } from './export.js';
 
 let wasm;
 const ready = Module().then((w) => { w.setup(); wasm = w; });
 let source = null; // { mesh, name, original: Float32Array positions as loaded, asModelled: size, note, dropped, factor }
 let last = null;   // last tile() result
+const tileMan = new Map(); // tile name -> Manifold, built lazily for layer slicing
 
 const post = (type, payload, transfer) => postMessage({ type, ...payload }, transfer || []);
 function postLoaded() {
@@ -43,13 +44,24 @@ onmessage = async (e) => {
       if (!source) throw new Error('No model loaded');
       const r = tile(wasm, source.mesh, { ...d.opts, onProgress: (p) => post('progress', { value: p }) });
       last = { r, opts: d.opts };
+      for (const m of tileMan.values()) m.delete(); tileMan.clear();
       const transfer = [];
       const tiles = r.tiles.map(t => {
         const positions = t.mesh.positions.slice(0), indices = t.mesh.indices.slice(0);
         transfer.push(positions.buffer, indices.buffer);
-        return { name: t.name, row: t.row, col: t.col, audit: t.audit, bounds: t.bounds, volume: t.volume, fitsBed: t.fitsBed, positions, indices };
+        return { name: t.name, row: t.row, col: t.col, audit: t.audit, bounds: t.bounds, volume: t.volume, shellVolume: t.shellVolume, fitsBed: t.fitsBed, positions, indices };
       });
-      post('tiled', { plan: r.plan, holes: r.holes, sourceVolume: r.sourceVolume, tileVolume: r.tileVolume, allOk: r.allOk, tiles }, transfer);
+      post('tiled', { plan: r.plan, holes: r.holes, sourceVolume: r.sourceVolume, tileVolume: r.tileVolume, printVolume: r.printVolume, hollow: r.hollow, allOk: r.allOk, tiles }, transfer);
+    } else if (d.type === 'layer') {
+      if (!last) throw new Error('Nothing tiled');
+      const out = {};
+      for (const t of last.r.tiles) {
+        if (d.z > t.bounds.size[2] || d.z <= 0) continue;
+        let m = tileMan.get(t.name);
+        if (!m) { m = toManifold(wasm, t.mesh); tileMan.set(t.name, m); }
+        out[t.name] = layerPath(wasm, m, d.z, d.opts);
+      }
+      post('layer', { z: d.z, seq: d.seq, tiles: out });
     } else if (d.type === 'zip') {
       if (!last) throw new Error('Nothing to export');
       const zip = zipTiles(last.r, last.opts, source.name, d.formats);

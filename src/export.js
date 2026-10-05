@@ -57,6 +57,7 @@ Source: ${sourceName}
 Assembles to: ${size.map(v => v.toFixed(1)).join(' x ')} mm (${plan.ny} rows x ${plan.nx} columns, ${tiles.length} tiles, ${seams} glued seams)
 Material: ${(result.tileVolume / 1000).toFixed(1)} cm3 total, ~${(result.tileVolume / 1000 * 1.24 / 1000).toFixed(1)} kg if printed solid in PLA
 Tallest tile: ${tiles.reduce((a, t) => t.bounds.size[2] > a.bounds.size[2] ? t : a).name} at ${size[2].toFixed(1)} mm
+Walls: ${result.hollow ? `hollow shell, ${result.hollow.wall} mm wall, ${result.hollow.openBottom ? 'open bottom' : 'sealed cavity'} — ${(result.printVolume / 1000).toFixed(1)} cm3 of material` : 'solid — set perimeters and infill in your slicer'}
 Bed: ${opts.bed.join(' x ')} mm, clearance ${opts.margin} mm
 Grid: ${plan.nx} x ${plan.ny} tiles of up to ${plan.tile[0].toFixed(1)} x ${plan.tile[1].toFixed(1)} mm
 Dowels: ${opts.dowel ? `${result.holes} holes, dia ${2 * opts.dowel.radius} x ${opts.dowel.depth} mm deep each side, ${opts.dowel.z} mm above base` : 'none'}

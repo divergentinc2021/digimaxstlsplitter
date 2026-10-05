@@ -166,6 +166,14 @@
     <p class="hint">Every tile audited after cutting: each edge shared by exactly two triangles, one shell, fits the bed, and the volumes add up. The zip includes an assembly sheet.</p>
   </section>
 
+  <details id="hollowBox">
+    <summary>Walls &amp; hollowing <small class="hint" style="margin:0 0 0 6px" id="hollowState">solid</small></summary>
+    <label><span>Hollow to a shell</span><input type="checkbox" id="hollow"></label>
+    <label><span>Wall thickness (mm)</span><input type="number" id="hWall" value="3" step="0.5" min="0.8"></label>
+    <label><span>Open bottom</span><input type="checkbox" id="hOpen" checked></label>
+    <p class="hint">Off = parts are saved solid and your slicer sets perimeters and infill (usual for FDM — 3–4 walls, 15–20 % infill is plenty for a base this thick). On = the tile is saved as a shell of this wall thickness: far less material, for pouring filler, resin / SLS, or when the slicer must see a true shell. Adds a few seconds per tile; the outer surface is untouched.</p>
+  </details>
+
   <details id="dowelBox">
     <summary>Dowel holes on cut faces <small class="hint" style="margin:0 0 0 6px" id="dowelState">off</small></summary>
     <label><span>Add holes</span><input type="checkbox" id="dowel"></label>
@@ -193,10 +201,13 @@
     <label><span>Wireframe overlay</span><input type="checkbox" id="wire"></label>
     <label><span>Bed grid (mm) <small class="hint" style="margin:0">minor / major</small></span><span class="row"><input type="number" id="gridMinor" value="10" min="1" style="width:64px"><input type="number" id="gridMajor" value="50" min="1" style="width:64px"></span></label>
     <label><span>Layer height (mm)</span><input type="number" id="layerH" value="0.2" step="0.05" min="0.05"></label>
+    <label><span>Perimeters (walls)</span><input type="number" id="simWalls" value="3" min="1" max="10"></label>
+    <label><span>Line width (mm)</span><input type="number" id="simLine" value="0.4" step="0.05" min="0.1"></label>
+    <label><span>Infill (%)</span><input type="number" id="simInfill" value="15" min="0" max="100"></label>
     <label><span>Sim speed (layers / s)</span><input type="number" id="simSpeed" value="4" step="1" min="0.1"></label>
     <div class="row"><button class="secondary" id="simPlay" disabled>Print</button><button class="secondary" id="simReset" disabled>Reset</button></div>
     <div class="stat" id="simStat" style="margin-top:8px"></div>
-    <p class="hint">Simulation only: layers reveal bottom-up on every plate at once with a head sweeping each layer. Not a toolpath — use your slicer for times.</p>
+    <p class="hint">Each layer is sliced from the real tile: the head traces the perimeters at the line width, then straight infill at the chosen density, alternating 45° per layer. A preview of the slicer's work, not its output — use your slicer for times.</p>
   </details>
 
   <details id="repairBox">

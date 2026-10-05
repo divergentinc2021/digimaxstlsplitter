@@ -8,7 +8,7 @@ const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'modu
 const PLA_G_PER_CM3 = 1.24;
 
 // ---------- persisted settings (bed, margin, dowels, view) ----------
-const SETTING_IDS = ['bedPreset', 'bx', 'by', 'bz', 'margin', 'dowel', 'dDia', 'dDepth', 'dZ', 'dPitch', 'filament', 'filamentColor', 'wire', 'gridMinor', 'gridMajor', 'layerH', 'simSpeed', 'scale', 'up'];
+const SETTING_IDS = ['bedPreset', 'bx', 'by', 'bz', 'margin', 'dowel', 'dDia', 'dDepth', 'dZ', 'dPitch', 'filament', 'filamentColor', 'wire', 'gridMinor', 'gridMajor', 'layerH', 'simSpeed', 'simWalls', 'simLine', 'simInfill', 'hollow', 'hWall', 'hOpen', 'scale', 'up'];
 function saveSettings() {
   try {
     const o = {}; for (const id of SETTING_IDS) { const el = $(id); o[id] = el.type === 'checkbox' ? el.checked : el.value; }
@@ -54,7 +54,7 @@ function frame(size, center = [size[0] / 2, size[1] / 2, size[2] / 2]) {
   controls.target.set(...center);
   camera.near = r / 200; camera.far = r * 50; camera.updateProjectionMatrix();
 }
-function clearView() { group.clear(); plateGroup.clear(); }
+function clearView() { group.clear(); plateGroup.clear(); pathGroup.clear(); sim.pathZ = -1; sim.paths = {}; }
 
 function addMesh(positions, indices, color, offset = [0, 0, 0]) {
   const g0 = new THREE.BufferGeometry();
@@ -207,11 +207,12 @@ document.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfe
 $('run').onclick = () => {
   const opts = {
     bed: bed(), margin: marginMm(), tiles: tilesOverride(),
-    dowel: $('dowel').checked ? { radius: +$('dDia').value / 2, depth: +$('dDepth').value, z: +$('dZ').value, pitch: +$('dPitch').value } : null
+    dowel: $('dowel').checked ? { radius: +$('dDia').value / 2, depth: +$('dDepth').value, z: +$('dZ').value, pitch: +$('dPitch').value } : null,
+    hollow: $('hollow').checked ? { wall: Math.max(0.8, +$('hWall').value || 3), openBottom: $('hOpen').checked } : null
   };
   $('run').disabled = true; $('dl').disabled = true; $('resultBox').hidden = true;
   $('run').firstElementChild.style.transform = 'scaleX(0)';
-  msg('Cutting … big models take a while; the page stays responsive.');
+  msg($('hollow').checked ? 'Cutting and hollowing … a few seconds per tile; the page stays responsive.' : 'Cutting … big models take a while; the page stays responsive.');
   worker.postMessage({ type: 'tile', opts });
 };
 const formatsPicked = () => $('fStl').checked || $('f3mf').checked;
@@ -224,6 +225,9 @@ $('srcStl').onclick = () => worker.postMessage({ type: 'exportSource', format: '
 $('src3mf').onclick = () => worker.postMessage({ type: 'exportSource', format: '3mf' });
 $('dowel').onchange = () => { $('dowelState').textContent = $('dowel').checked ? 'on' : 'off'; };
 $('dowelState').textContent = $('dowel').checked ? 'on' : 'off';
+const hollowState = () => { $('hollowState').textContent = $('hollow').checked ? `${$('hWall').value} mm shell` : 'solid'; };
+for (const id of ['hollow', 'hWall']) for (const ev of ['input', 'change']) $(id).addEventListener(ev, hollowState);
+hollowState();
 
 function download(bytes, name, type) {
   const a = document.createElement('a');
@@ -313,7 +317,47 @@ function highlight(name) {
 }
 
 // ---------- print simulation ----------
-const sim = { targets: [], playing: false, layer: 0, layers: 0, maxH: 0, lh: 0.2, frac: 0, t0: 0 };
+const sim = { targets: [], playing: false, layer: 0, layers: 0, maxH: 0, lh: 0.2, frac: 0, t0: 0, pathZ: -1, pending: 0, seq: 0, paths: {}, lastReq: 0 };
+const pathGroup = new THREE.Group(); scene.add(pathGroup);
+function simOpts() { return { walls: Math.max(1, +$('simWalls').value || 3), lineWidth: Math.max(0.1, +$('simLine').value || 0.4), infill: Math.min(1, Math.max(0, (+$('simInfill').value || 0) / 100)) }; }
+/** Ask the worker for the current layer's toolpath (throttled; one in flight). */
+function requestLayer(z) {
+  if (sim.pending && performance.now() - sim.lastReq < 1500) return;
+  sim.pending = ++sim.seq; sim.lastReq = performance.now();
+  worker.postMessage({ type: 'layer', z, seq: sim.pending, opts: { ...simOpts(), angle: (sim.layer % 2) * Math.PI / 2 + Math.PI / 4 } });
+}
+/** Flatten a tile's layer into one polyline list with cumulative lengths so the head can follow it. */
+function buildTrack(L) {
+  const pts = []; let len = 0;
+  const push = (x, y) => { if (pts.length) len += Math.hypot(x - pts[pts.length - 1][0], y - pts[pts.length - 1][1]); pts.push([x, y, len]); };
+  for (const poly of L.perims) { for (const p of poly) push(p[0], p[1]); push(poly[0][0], poly[0][1]); }
+  for (let i = 0; i < L.infill.length; i += 4) { push(L.infill[i], L.infill[i + 1]); push(L.infill[i + 2], L.infill[i + 3]); }
+  return { pts, len };
+}
+function trackPoint(track, f) {
+  const target = f * track.len, pts = track.pts;
+  let lo = 0, hi = pts.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (pts[mid][2] < target) lo = mid + 1; else hi = mid; }
+  const b = pts[lo], a = pts[Math.max(0, lo - 1)];
+  const u = b[2] > a[2] ? (target - a[2]) / (b[2] - a[2]) : 0;
+  return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
+}
+function drawLayerPaths(z, tiles) {
+  pathGroup.clear(); sim.paths = {};
+  const b = bed(), t = theme();
+  for (const { mesh, tile } of sim.targets) {
+    const L = tiles[tile.name]; if (!L) continue;
+    const s = tile.bounds.size, ox = mesh.position.x, oy = mesh.position.y;
+    const perim = [], fill = [];
+    for (const poly of L.perims) for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length]; perim.push(ox + p[0], oy + p[1], z + 0.05, ox + q[0], oy + q[1], z + 0.05); }
+    for (let i = 0; i < L.infill.length; i += 4) fill.push(ox + L.infill[i], oy + L.infill[i + 1], z + 0.05, ox + L.infill[i + 2], oy + L.infill[i + 3], z + 0.05);
+    const mk = (arr, color, op) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3)); return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: op, depthTest: false })); };
+    if (perim.length) pathGroup.add(mk(perim, 0xf59e0b, .95));
+    if (fill.length) pathGroup.add(mk(fill, isDark() ? 0x38bdf8 : 0x0369a1, .6));
+    sim.paths[tile.name] = buildTrack(L);
+  }
+  sim.pathZ = z;
+}
 function simSetup() {
   sim.lh = Math.max(0.05, +$('layerH').value || 0.2);
   sim.maxH = sim.targets.length ? Math.max(...sim.targets.map(t => t.tile.bounds.size[2])) : 0;
@@ -331,15 +375,20 @@ function simApply() {
     head.visible = active && !done;
     if (head.visible) {
       const s = tile.bounds.size, ox = (b[0] - s[0]) / 2, oy = (b[1] - s[1]) / 2;
-      const rows = 6, r = Math.min(rows - 1, Math.floor(sim.frac * rows)), u = (sim.frac * rows) % 1;
-      const x = ox + s[0] * (r % 2 ? 1 - u : u), y = oy + s[1] * (r + 0.5) / rows;
+      const track = sim.paths[tile.name];
+      let x, y;
+      if (track && track.len > 0) { const q = trackPoint(track, sim.frac); x = ox + q[0]; y = oy + q[1]; }
+      else { x = ox + s[0] / 2; y = oy + s[1] / 2; } // path not back from the worker yet: park over the tile centre
       head.position.z = z + 1; head.userData.gantry.position.y = y; head.userData.carriage.position.set(x, y, 10);
     }
   }
+  if (active && sim.layer > 0 && sim.layer < sim.layers && Math.abs(sim.pathZ - z) > 1e-9) requestLayer(z);
+  if (!active || sim.layer >= sim.layers) { pathGroup.clear(); sim.pathZ = -1; }
   $('simStat').innerHTML = statHtml([
     ['Layer', `${Math.min(sim.layer, sim.layers)} / ${sim.layers}`],
     ['Height', `${fmt(Math.min(z, sim.maxH), 2)} / ${fmt(sim.maxH, 2)} mm`],
-    ['Printing', `${sim.targets.filter(t => z < t.tile.bounds.size[2]).length} / ${sim.targets.length} plates`]
+    ['Printing', `${sim.targets.filter(t => z < t.tile.bounds.size[2]).length} / ${sim.targets.length} plates`],
+    ['Recipe', `${simOpts().walls} walls × ${simOpts().lineWidth} mm · ${Math.round(simOpts().infill * 100)} % infill`]
   ]);
 }
 function simTick(now) {
@@ -373,7 +422,7 @@ function tileProblem(t) {
 }
 function renderTable() {
   const cols = [['name', 'Tile'], ['x', 'X'], ['y', 'Y'], ['z', 'Height'], ['vol', 'cm³'], ['audit', 'Audit']];
-  const rows = result.tiles.map(t => ({ t, name: t.name, x: t.bounds.size[0], y: t.bounds.size[1], z: t.bounds.size[2], vol: t.volume / 1000, audit: t.audit.ok && t.fitsBed ? 1 : 0 }));
+  const rows = result.tiles.map(t => ({ t, name: t.name, x: t.bounds.size[0], y: t.bounds.size[1], z: t.bounds.size[2], vol: (t.shellVolume ?? t.volume) / 1000, audit: t.audit.ok && t.fitsBed ? 1 : 0 }));
   rows.sort((a, b) => ((a[sortKey] > b[sortKey]) - (a[sortKey] < b[sortKey])) * sortDir || (a.name > b.name ? 1 : -1));
   $('tiles').innerHTML = '<tr>' + cols.map(([k, l]) => `<th data-k="${k}" class="${k === sortKey ? 'sorted' : ''}${['x', 'y', 'z', 'vol'].includes(k) ? ' num' : ''}">${l}${k === sortKey ? (sortDir > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('') + '</tr>'
     + rows.map(r => `<tr data-name="${r.name}" class="${r.name === selected ? 'sel' : ''}"><td>${label(r.name)}</td><td class="num">${fmt(r.x)}</td><td class="num">${fmt(r.y)}</td><td class="num">${fmt(r.z)}</td><td class="num">${fmt(r.vol)}</td><td class="${r.audit ? 'ok' : 'bad'}">${tileProblem(r.t)}</td></tr>`).join('');
@@ -428,7 +477,7 @@ worker.onmessage = ({ data: d }) => {
     const bad = d.tiles.filter(t => !t.audit.ok), big = d.tiles.filter(t => !t.fitsBed);
     const volOk = Math.abs(d.tileVolume - d.sourceVolume) < 1e-3 * d.sourceVolume;
     const seams = (p.nx - 1) * p.ny + (p.ny - 1) * p.nx;
-    const kg = d.tileVolume / 1000 * PLA_G_PER_CM3 / 1000;
+    const kg = d.printVolume / 1000 * PLA_G_PER_CM3 / 1000;
     const minGrid = [Math.ceil(s[0] / (b[0] - 2 * m)), Math.ceil(s[1] / (b[1] - 2 * m))];
     const tallest = d.tiles.reduce((a, t) => t.bounds.size[2] > a.bounds.size[2] ? t : a);
     $('verdict').className = 'verdict ' + (d.allOk ? 'ok' : 'bad');
@@ -439,7 +488,8 @@ worker.onmessage = ({ data: d }) => {
     $('resultStat').innerHTML = statHtml([
       ['Layout', `${p.ny} row${p.ny > 1 ? 's' : ''} × ${p.nx} column${p.nx > 1 ? 's' : ''} — ${d.tiles.length} tiles of up to ${fmt(p.tile[0])} × ${fmt(p.tile[1])} mm`],
       ['Seams', `${seams} glued joint${seams === 1 ? '' : 's'}`],
-      ['Material', `${fmt(d.tileVolume / 1000)} cm³ · ~${fmt(kg, 1)} kg if printed solid in PLA`],
+      ['Walls', d.hollow ? `hollow shell, ${d.hollow.wall} mm wall, ${d.hollow.openBottom ? 'open bottom' : 'sealed cavity'}` : 'solid — perimeters and infill are set in your slicer'],
+      ['Material', d.hollow ? `${fmt(d.printVolume / 1000)} cm³ · ~${fmt(kg, 1)} kg PLA (${fmt(100 * d.printVolume / d.tileVolume, 0)} % of solid)` : `${fmt(d.tileVolume / 1000)} cm³ · ~${fmt(kg, 1)} kg if printed solid in PLA`],
       ['Tallest', `${label(tallest.name)} at ${fmt(tallest.bounds.size[2])} mm — needs a printer with Z ≥ that`],
       ['Dowel holes', d.holes]
     ]);
@@ -452,6 +502,11 @@ worker.onmessage = ({ data: d }) => {
     redraw();
     msg(d.allOk ? `Done — ${d.tiles.length} tiles.` : 'Some tiles failed. Adjust the plan and split again.', d.allOk ? 'ok' : 'bad');
     $('resultBox').scrollIntoView({ block: 'start', behavior: 'smooth' });
+    return;
+  }
+  if (d.type === 'layer') {
+    if (d.seq === sim.pending) sim.pending = 0;
+    if (sim.targets.length && (sim.playing || sim.layer > 0)) drawLayerPaths(d.z, d.tiles);
     return;
   }
   if (d.type === 'zip') {

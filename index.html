@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>digimaxstlsplitter</title>
+<meta name="description" content="Split a large STL / 3MF / GLB into printable, guaranteed-watertight tiles for your printer bed. Runs in your browser — nothing is uploaded.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f172a'/%3E%3Cpath d='M6 6h9v9H6zM17 6h9v9h-9zM6 17h9v9H6zM17 17h9v9h-9z' fill='%2338bdf8'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --line:#334155; --fg:#e2e8f0; --dim:#94a3b8; --acc:#38bdf8; --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  body { display:grid; grid-template-columns: 360px 1fr; grid-template-rows: 100vh; }
+  aside { background:var(--panel); border-right:1px solid var(--line); overflow:auto; padding:16px; display:flex; flex-direction:column; gap:14px; }
+  main { position:relative; min-width:0; }
+  canvas { display:block; width:100%; height:100%; }
+  h1 { font-size:18px; margin:0; letter-spacing:.3px; }
+  h1 small { color:var(--dim); font-weight:400; font-size:12px; display:block; }
+  fieldset { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:0; }
+  legend { color:var(--dim); font-size:12px; padding:0 4px; }
+  label { display:flex; justify-content:space-between; align-items:center; gap:8px; margin:6px 0; }
+  input[type=number], select { width:110px; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:5px 7px; font:inherit; }
+  input[type=checkbox] { accent-color: var(--acc); }
+  .row { display:flex; gap:8px; }
+  .row input[type=number] { width:72px; }
+  button { background:var(--acc); color:#06202c; border:0; border-radius:8px; padding:9px 12px; font:inherit; font-weight:600; cursor:pointer; }
+  button.secondary { background:var(--line); color:var(--fg); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .drop { border:2px dashed var(--line); border-radius:10px; padding:18px; text-align:center; color:var(--dim); cursor:pointer; }
+  .drop.over { border-color:var(--acc); color:var(--fg); }
+  .stat { display:grid; grid-template-columns: auto 1fr; gap:2px 10px; font-size:13px; }
+  .stat b { color:var(--dim); font-weight:500; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+  #progress { height:4px; background:var(--line); border-radius:2px; overflow:hidden; }
+  #progress i { display:block; height:100%; width:0; background:var(--acc); transition:width .15s; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  td, th { padding:3px 4px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
+  th { color:var(--dim); font-weight:500; }
+  #msg { white-space:pre-wrap; font-size:12px; }
+  .hint { color:var(--dim); font-size:12px; margin:0; }
+  #hud { position:absolute; left:12px; bottom:10px; color:var(--dim); font-size:12px; pointer-events:none; }
+  a { color:var(--acc); }
+  @media (max-width: 800px) { body { grid-template-columns:1fr; grid-template-rows: auto 1fr; } aside { border-right:0; border-bottom:1px solid var(--line); max-height:55vh; } }
+</style>
+</head>
+<body>
+<aside>
+  <h1>digimaxstlsplitter <small>Cut a big model into watertight tiles. Nothing leaves your browser.</small></h1>
+
+  <div class="drop" id="drop">Drop an <b>STL</b>, <b>3MF</b> or <b>GLB</b> here, or click to choose
+    <input type="file" id="file" accept=".stl,.3mf,.glb" hidden></div>
+
+  <fieldset>
+    <legend>Model</legend>
+    <label>Units in file <select id="scale"><option value="1">mm</option><option value="10">cm</option><option value="1000">m</option><option value="25.4">inch</option></select></label>
+    <label>Up axis in file <select id="up"><option value="z">Z (STL / 3MF)</option><option value="y">Y (glTF / most viewers)</option></select></label>
+    <p class="hint">GLB is read as metres, Y-up and converted automatically — leave these at mm / Z for GLB.</p>
+    <div class="stat" id="modelStat"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Printer bed (mm)</legend>
+    <div class="row"><input type="number" id="bx" value="220"><input type="number" id="by" value="220"><input type="number" id="bz" value="250"></div>
+    <label>Edge margin <input type="number" id="margin" value="10" min="0"></label>
+    <label>Tiles X × Y (blank = auto) <span class="row"><input type="number" id="nx" min="1" placeholder="auto"><input type="number" id="ny" min="1" placeholder="auto"></span></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Dowel holes on cut faces</legend>
+    <label>Enable <input type="checkbox" id="dowel"></label>
+    <label>Pin diameter <input type="number" id="dDia" value="6.2" step="0.1"></label>
+    <label>Depth each side <input type="number" id="dDepth" value="12"></label>
+    <label>Height above base <input type="number" id="dZ" value="17.5"></label>
+    <label>Pitch along seam <input type="number" id="dPitch" value="80"></label>
+    <p class="hint">Holes are only placed where both sides are solid. Not needed if you glue with PU.</p>
+  </fieldset>
+
+  <button id="run" disabled>Split into tiles</button>
+  <div id="progress"><i></i></div>
+  <div id="msg"></div>
+
+  <fieldset id="resultBox" hidden>
+    <legend>Result</legend>
+    <div class="stat" id="resultStat"></div>
+    <div class="row" style="margin-top:8px">
+      <button id="dl" disabled>Download tiles (.zip)</button>
+    </div>
+    <label style="margin-top:6px">Include <span><label style="display:inline;margin:0"><input type="checkbox" id="fStl" checked> STL</label> &nbsp; <label style="display:inline;margin:0"><input type="checkbox" id="f3mf" checked> 3MF</label></span></label>
+    <table id="tiles"></table>
+  </fieldset>
+
+  <fieldset>
+    <legend>Repaired source</legend>
+    <p class="hint">Download the loaded model re-exported as a single closed solid (welded, degenerates dropped, base on z=0).</p>
+    <div class="row"><button class="secondary" id="srcStl" disabled>STL</button><button class="secondary" id="src3mf" disabled>3MF</button></div>
+  </fieldset>
+
+  <p class="hint">Why this works when other splitters don't: tiles are cut with <a href="https://github.com/elalish/manifold" target="_blank" rel="noopener">Manifold</a> booleans, so cut faces are always closed — then every tile is independently audited (each edge shared by exactly two triangles, one shell) and the volumes must add up before you can download. <a href="https://github.com/divergentinc2021/digimaxstlsplitter" target="_blank" rel="noopener">Source (MIT)</a></p>
+</aside>
+<main>
+  <canvas id="view"></canvas>
+  <div id="hud">drag: orbit · wheel: zoom · right-drag: pan</div>
+</main>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

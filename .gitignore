@@ -1,0 +1,7 @@
+node_modules
+dist
+.wrangler
+*.stl
+*.3mf
+*.glb
+!test/fixtures/*

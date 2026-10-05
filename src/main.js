@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const $ = (id) => document.getElementById(id);
 const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
@@ -16,7 +17,9 @@ function applyTheme() { scene.background = new THREE.Color(theme().bg); if (mode
 $('theme').onclick = () => { const next = isDark() ? 'light' : 'dark'; document.documentElement.dataset.theme = next; try { localStorage.setItem('dm-theme', next); } catch {} applyTheme(); };
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 const camera = new THREE.PerspectiveCamera(45, 1, 1, 100000);
-const controls = new OrbitControls(camera, canvas); controls.enableDamping = true;
+camera.up.set(0, 0, 1); // must precede OrbitControls: it snapshots camera.up in its constructor
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.dampingFactor = 0.08; controls.zoomToCursor = true; controls.screenSpacePanning = true;
 scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 1.1));
 const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(1, -1, 2); scene.add(sun);
 const group = new THREE.Group(); scene.add(group);
@@ -75,7 +78,9 @@ function simApply() {
   const b = bed();
   for (const { mesh, tile, head } of sim.targets) {
     const h = tile.bounds.size[2], done = z >= h;
-    mesh.material.clippingPlanes = active && !done ? [new THREE.Plane(new THREE.Vector3(0, 0, -1), z)] : [];
+    const planes = active && !done ? [new THREE.Plane(new THREE.Vector3(0, 0, -1), z)] : [];
+    mesh.material.clippingPlanes = planes;
+    const w = mesh.getObjectByName('wire'); if (w) w.material.clippingPlanes = planes;
     mesh.visible = !active || sim.layer > 0;
     head.visible = active && !done;
     if (head.visible) {
@@ -148,15 +153,22 @@ function redraw() {
 }
 $('plates').onclick = () => { plateView = !plateView; $('plates').textContent = plateView ? 'Model view' : 'Plate view'; redraw(); if (!plateView) frame(model.bounds.size); };
 function addMesh(positions, indices, color, offset = [0, 0, 0]) {
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  g.setIndex(new THREE.BufferAttribute(indices, 1));
-  g.computeVertexNormals();
+  const g0 = new THREE.BufferGeometry();
+  g0.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  g0.setIndex(new THREE.BufferAttribute(indices, 1));
+  // split normals at creases sharper than 35° so cut faces and the rim chamfer stay crisp,
+  // while the terrain itself still shades smoothly (plain computeVertexNormals bleeds across the edge)
+  const g = toCreasedNormals(g0, THREE.MathUtils.degToRad(35));
   const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: .75, metalness: 0, side: THREE.DoubleSide }));
   m.position.set(...offset);
+  const wire = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ wireframe: true, color: isDark() ? 0x0f172a : 0x1e293b, transparent: true, opacity: .35, depthTest: true }));
+  wire.visible = $('wire').checked; wire.name = 'wire';
+  wire.material.polygonOffset = true; wire.material.polygonOffsetFactor = -1;
+  m.add(wire);
   group.add(m);
   return m;
 }
+$('wire').onchange = () => group.children.forEach(m => { const w = m.getObjectByName('wire'); if (w) w.visible = $('wire').checked; });
 // ---------- filament colour ----------
 function filamentColor(i) {
   const v = $('filament').value;
@@ -176,8 +188,6 @@ function frame(size) {
   controls.target.set(size[0] / 2, size[1] / 2, size[2] / 2);
   camera.near = r / 200; camera.far = r * 50; camera.updateProjectionMatrix();
 }
-camera.up.set(0, 0, 1);
-
 // ---------- state ----------
 let model = null;   // loaded summary from worker
 let result = null;  // tiled summary

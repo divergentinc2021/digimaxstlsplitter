@@ -13,6 +13,7 @@
     "deploy": "vite build && wrangler pages deploy dist --project-name digimaxstlsplitter"
   },
   "dependencies": {
+    "earcut": "^3.2.4",
     "fflate": "^0.8.3",
     "manifold-3d": "^3.5.4",
     "three": "^0.186.1"

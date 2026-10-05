@@ -1,5 +1,6 @@
 // Tiling engine. Takes an initialised manifold-3d module so it runs in Node, a worker, or the page.
 import { audit, bounds, volume, weld, dropDegenerate } from './mesh.js';
+import { cleanTile } from './clean.js';
 
 export function toManifold(wasm, mesh) {
   const m = new wasm.Mesh({ numProp: 3, vertProperties: mesh.positions, triVerts: mesh.indices });
@@ -81,9 +82,12 @@ export function tile(wasm, mesh, opts) {
     let shellVolume = null;
     if (opts.hollow && opts.hollow.wall > 0) { const h = hollow(wasm, t, opts.hollow); t.delete(); t = h; shellVolume = t.volume(); }
     progress(++done / (plan.nx * plan.ny));
-    const raw = fromManifold(t); t.delete();
+    // cleanup: a 5 µm tolerance simplify collapses ~half the needle triangles the boolean leaves on the cut
+    // walls without moving the surface; then weld at 1 µm and re-triangulate the planar faces (clean.js)
+    const simp = opts.clean === false ? t : t.simplify(0.005);
+    const raw = fromManifold(simp); if (simp !== t) simp.delete(); t.delete();
     const dd = dropDegenerate(raw, 0); // only triangles with a repeated vertex (eps 0): a real micro-triangle can still close the mesh
-    const tm = { positions: dd.positions, indices: dd.indices };
+    const tm = opts.clean === false ? { positions: dd.positions, indices: dd.indices } : cleanTile({ positions: dd.positions, indices: dd.indices }, volume).mesh;
     const tb = bounds(tm);
     // place each tile at its own origin, base on z=0
     const p = tm.positions;

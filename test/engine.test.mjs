@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import Module from 'manifold-3d';
 import { audit, weld, dropDegenerate, volume } from '../src/mesh.js';
-import { tile, fromManifold, layerPath } from '../src/engine.js';
+import { tile, fromManifold, layerPath, estimateTile } from '../src/engine.js';
 import { parseSTL, parse3MF, parseGLB } from '../src/parsers.js';
 import { writeSTL, write3MF } from '../src/export.js';
 
@@ -139,4 +139,13 @@ test('layerPath: perimeters and infill at mid-height of a cube', () => {
   assert.ok(L.infill.length > 0 && L.infill.length % 4 === 0);
   // every infill segment lies inside the inner region (40 - 2*0.8 = 38.4 wide)
   for (let i = 0; i < L.infill.length; i += 4) for (const x of [L.infill[i], L.infill[i + 2]]) assert.ok(x > 0.7 && x < 39.3);
+});
+
+test('estimateTile: a 40x40x10 block at 0.2 mm, 3 walls, 15% infill gives a sane time and extrusion', () => {
+  const c = wasm.Manifold.cube([40, 40, 10], false);
+  const e = estimateTile(wasm, c, 10, { layerHeight: 0.2, walls: 3, lineWidth: 0.4, infill: 0.15, solidLayers: 4 });
+  assert.equal(e.layers, 50);
+  // extrusion must be less than the solid (16 cm³) and more than the walls alone
+  assert.ok(e.mm3 < 16000 && e.mm3 > 50 * 3 * 150 * 0.4 * 0.2 * 0.9, 'mm3 ' + e.mm3);
+  assert.ok(e.seconds > 60 && e.seconds < 3600, 'seconds ' + e.seconds);
 });

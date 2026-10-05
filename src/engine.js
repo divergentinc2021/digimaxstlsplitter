@@ -133,6 +133,37 @@ export function hollow(wasm, solid, { wall, openBottom = true }) {
 }
 
 /**
+ * Rough print estimate for one tile from sampled real slices. Speeds in mm/s; returns seconds, mm³ of extrusion, layers.
+ * Bottom `solidLayers` are sliced at 100 % infill; the rest is sampled `samples` times and scaled to the layer count.
+ */
+export function estimateTile(wasm, man, height, { layerHeight = 0.2, walls = 3, lineWidth = 0.4, infill = 0.15, solidLayers = 4, perimeterSpeed = 45, infillSpeed = 80, maxFlow = 0, travelPerLayer = 1.5, samples = 24 } = {}) {
+  const layers = Math.max(1, Math.ceil(height / layerHeight));
+  // the hotend's volumetric ceiling caps any commanded speed: v ≤ flow ÷ (line width × layer height)
+  const cap = maxFlow > 0 ? maxFlow / (lineWidth * layerHeight) : Infinity;
+  const vp = Math.min(perimeterSpeed, cap), vi = Math.min(infillSpeed, cap);
+  const pathLen = (L) => {
+    let p = 0; for (const poly of L.perims) for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length]; p += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+    let f = 0; for (let i = 0; i < L.infill.length; i += 4) f += Math.hypot(L.infill[i + 2] - L.infill[i], L.infill[i + 3] - L.infill[i + 1]);
+    return [p, f];
+  };
+  let perim = 0, fill = 0;
+  const nb = Math.min(solidLayers, layers);
+  for (let k = 0; k < nb; k++) { const [p, f] = pathLen(layerPath(wasm, man, (k + 0.5) * layerHeight, { walls, lineWidth, infill: 1 })); perim += p; fill += f; }
+  const rest = layers - nb;
+  if (rest > 0) {
+    const n = Math.min(samples, rest);
+    for (let k = 0; k < n; k++) {
+      const z = (nb + (k + 0.5) * rest / n) * layerHeight;
+      const [p, f] = pathLen(layerPath(wasm, man, Math.min(z, height - 1e-3), { walls, lineWidth, infill, angle: (k % 2) * Math.PI / 2 + Math.PI / 4 }));
+      perim += p * rest / n; fill += f * rest / n;
+    }
+  }
+  const seconds = perim / vp + fill / vi + layers * travelPerLayer;
+  const mm3 = (perim + fill) * lineWidth * layerHeight;
+  return { seconds, mm3, layers, perimeterMm: perim, infillMm: fill, wallSpeedUsed: vp, infillSpeedUsed: vi };
+}
+
+/**
  * One print layer of a tile at height z: `walls` perimeters at `lineWidth`, then straight infill at `infill` (0..1).
  * Returns { perims: [[x,y],...][], infill: [x0,y0,x1,y1,...] } in the tile's own coordinates.
  */

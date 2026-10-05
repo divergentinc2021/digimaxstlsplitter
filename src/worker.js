@@ -2,7 +2,7 @@
 import Module from 'manifold-3d';
 import { parseAny } from './parsers.js';
 import { audit, bounds, dropDegenerate, orient, translate, volume } from './mesh.js';
-import { tile, toManifold, layerPath } from './engine.js';
+import { tile, toManifold, layerPath, estimateTile } from './engine.js';
 import { zipTiles, writeSTL, write3MF } from './export.js';
 
 let wasm;
@@ -52,6 +52,16 @@ onmessage = async (e) => {
         return { name: t.name, row: t.row, col: t.col, audit: t.audit, bounds: t.bounds, volume: t.volume, shellVolume: t.shellVolume, fitsBed: t.fitsBed, positions, indices };
       });
       post('tiled', { plan: r.plan, holes: r.holes, sourceVolume: r.sourceVolume, tileVolume: r.tileVolume, printVolume: r.printVolume, hollow: r.hollow, allOk: r.allOk, tiles }, transfer);
+    } else if (d.type === 'estimate') {
+      if (!last) throw new Error('Nothing tiled');
+      const out = {}; let i = 0;
+      for (const t of last.r.tiles) {
+        let m = tileMan.get(t.name);
+        if (!m) { m = toManifold(wasm, t.mesh); tileMan.set(t.name, m); }
+        out[t.name] = estimateTile(wasm, m, t.bounds.size[2], d.opts);
+        post('progress', { value: ++i / last.r.tiles.length, what: 'estimate' });
+      }
+      post('estimate', { tiles: out, opts: d.opts });
     } else if (d.type === 'layer') {
       if (!last) throw new Error('Nothing tiled');
       const out = {};

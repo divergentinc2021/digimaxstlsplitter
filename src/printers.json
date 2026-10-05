@@ -1,0 +1,29 @@
+{
+  "_about": "Curated printer profiles for the bed preset and the print-time estimate. Speeds are typical stock-profile values for PLA (wall / infill, mm/s); maxFlow is the practical volumetric ceiling of the stock hotend in mm³/s and caps the effective speed at flow ÷ (line width × layer height). layerOverhead is seconds per layer for travel, z-hop and retractions. Values come from the manufacturers' spec pages and the stock PrusaSlicer / OrcaSlicer / Bambu Studio profiles as of 2026-10; they are starting points, not measurements — PR corrections with a source.",
+  "printers": [
+    { "id": "ender3",      "name": "Creality Ender-3 / Pro / V2", "bed": [220, 220, 250], "wall": 40,  "infill": 60,  "maxFlow": 10, "layerOverhead": 2.0, "source": "Creality spec; Cura stock profile" },
+    { "id": "ender3v3",    "name": "Creality Ender-3 V3 / KE",    "bed": [220, 220, 240], "wall": 150, "infill": 250, "maxFlow": 24, "layerOverhead": 1.2, "source": "Creality spec (500 mm/s class, 32 mm³/s hotend)" },
+    { "id": "k1",          "name": "Creality K1 / K1C",          "bed": [220, 220, 250], "wall": 200, "infill": 300, "maxFlow": 28, "layerOverhead": 1.0, "source": "Creality spec; Creality Print profile" },
+    { "id": "k1max",       "name": "Creality K1 Max",             "bed": [300, 300, 300], "wall": 200, "infill": 300, "maxFlow": 28, "layerOverhead": 1.0, "source": "Creality spec" },
+    { "id": "a1mini",      "name": "Bambu Lab A1 mini",           "bed": [180, 180, 180], "wall": 200, "infill": 270, "maxFlow": 20, "layerOverhead": 1.0, "source": "Bambu spec; Bambu Studio 0.20 Standard" },
+    { "id": "a1",          "name": "Bambu Lab A1",                "bed": [256, 256, 256], "wall": 200, "infill": 270, "maxFlow": 24, "layerOverhead": 1.0, "source": "Bambu spec; Bambu Studio 0.20 Standard" },
+    { "id": "p1s",         "name": "Bambu Lab P1P / P1S",         "bed": [256, 256, 256], "wall": 200, "infill": 270, "maxFlow": 21, "layerOverhead": 1.0, "source": "Bambu spec; Bambu Studio 0.20 Standard" },
+    { "id": "x1c",         "name": "Bambu Lab X1 / X1C / X1E",    "bed": [256, 256, 256], "wall": 200, "infill": 270, "maxFlow": 24, "layerOverhead": 1.0, "source": "Bambu spec; Bambu Studio 0.20 Standard" },
+    { "id": "h2d",         "name": "Bambu Lab H2D",               "bed": [350, 320, 325], "wall": 250, "infill": 350, "maxFlow": 40, "layerOverhead": 0.9, "source": "Bambu spec" },
+    { "id": "mk3s",        "name": "Prusa i3 MK3S+",              "bed": [250, 210, 210], "wall": 45,  "infill": 80,  "maxFlow": 12, "layerOverhead": 1.8, "source": "PrusaSlicer 0.20 QUALITY MK3S" },
+    { "id": "mk4",         "name": "Prusa MK4 / MK4S",            "bed": [250, 210, 220], "wall": 170, "infill": 200, "maxFlow": 24, "layerOverhead": 1.2, "source": "PrusaSlicer 0.20 SPEED MK4IS" },
+    { "id": "mini",        "name": "Prusa MINI+",                 "bed": [180, 180, 180], "wall": 45,  "infill": 80,  "maxFlow": 12, "layerOverhead": 1.8, "source": "PrusaSlicer 0.20 QUALITY MINI" },
+    { "id": "xl",          "name": "Prusa XL",                    "bed": [360, 360, 360], "wall": 170, "infill": 200, "maxFlow": 24, "layerOverhead": 1.2, "source": "PrusaSlicer 0.20 SPEED XL" },
+    { "id": "core1",       "name": "Prusa CORE One",              "bed": [250, 220, 270], "wall": 170, "infill": 200, "maxFlow": 24, "layerOverhead": 1.1, "source": "Prusa spec" },
+    { "id": "voron24",     "name": "Voron 2.4 (350)",             "bed": [350, 350, 340], "wall": 150, "infill": 250, "maxFlow": 25, "layerOverhead": 1.0, "source": "typical Voron / Rapido build" },
+    { "id": "neptune4",    "name": "Elegoo Neptune 4 / Pro",      "bed": [225, 225, 265], "wall": 120, "infill": 200, "maxFlow": 18, "layerOverhead": 1.4, "source": "Elegoo spec" },
+    { "id": "neptune4max", "name": "Elegoo Neptune 4 Max",        "bed": [420, 420, 480], "wall": 120, "infill": 200, "maxFlow": 18, "layerOverhead": 1.5, "source": "Elegoo spec" },
+    { "id": "cc1",         "name": "Elegoo Centauri Carbon",      "bed": [256, 256, 256], "wall": 200, "infill": 300, "maxFlow": 28, "layerOverhead": 1.0, "source": "Elegoo spec" },
+    { "id": "adv5m",       "name": "Flashforge Adventurer 5M / Pro", "bed": [220, 220, 220], "wall": 200, "infill": 300, "maxFlow": 24, "layerOverhead": 1.0, "source": "Flashforge spec" },
+    { "id": "x4plus",      "name": "Qidi X-Plus 3",               "bed": [280, 280, 270], "wall": 200, "infill": 300, "maxFlow": 28, "layerOverhead": 1.0, "source": "Qidi spec" },
+    { "id": "sv06",        "name": "Sovol SV06 / Plus",           "bed": [220, 220, 250], "wall": 50,  "infill": 80,  "maxFlow": 12, "layerOverhead": 1.8, "source": "Sovol spec" },
+    { "id": "ultimaker",   "name": "Ultimaker S5",                "bed": [330, 240, 300], "wall": 35,  "infill": 60,  "maxFlow": 10, "layerOverhead": 2.0, "source": "Ultimaker Cura default" },
+    { "id": "mega",        "name": "Anycubic Kobra 2 / Max",      "bed": [220, 220, 250], "wall": 150, "infill": 250, "maxFlow": 22, "layerOverhead": 1.2, "source": "Anycubic spec" },
+    { "id": "kobra3",      "name": "Anycubic Kobra 3",            "bed": [250, 250, 260], "wall": 150, "infill": 250, "maxFlow": 24, "layerOverhead": 1.2, "source": "Anycubic spec" }
+  ]
+}

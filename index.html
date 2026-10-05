@@ -125,16 +125,8 @@
 
   <section id="s2">
     <h2><span class="step">2</span>Printer bed</h2>
-    <label><span>Printer</span><select id="bedPreset">
-      <option value="220,220,250">Ender-3 / 220 × 220 × 250</option>
-      <option value="235,235,250">Ender-3 V3 / 235 × 235 × 250</option>
-      <option value="256,256,256">Bambu X1 / P1 / 256³</option>
-      <option value="180,180,180">Bambu A1 mini / 180³</option>
-      <option value="250,210,220">Prusa MK4 / 250 × 210 × 220</option>
-      <option value="360,360,360">Prusa XL / 360 × 360 × 360</option>
-      <option value="300,300,400">300 × 300 × 400</option>
-      <option value="custom">Custom…</option>
-    </select></label>
+    <label><span>Printer</span><select id="bedPreset"><option value="custom">Custom…</option></select></label>
+    <p class="hint" id="presetNote" style="margin:0 0 6px"></p>
     <div class="xyz">
       <span data-axis="X"><input type="number" id="bx" value="220" min="10"></span>
       <span data-axis="Y"><input type="number" id="by" value="220" min="10"></span>
@@ -161,6 +153,7 @@
       <button id="dl" disabled>Download tiles (.zip)</button>
       <button class="secondary" id="plates">Plate view</button>
     </div>
+    <div class="stat" id="estimate" style="margin-top:8px"></div>
     <label><span>Include in zip</span><span class="row"><label style="margin:0"><input type="checkbox" id="fStl" checked> STL</label><label style="margin:0"><input type="checkbox" id="f3mf" checked> 3MF</label></span></label>
     <table id="tiles"></table>
     <p class="hint">Every tile audited after cutting: each edge shared by exactly two triangles, one shell, fits the bed, and the volumes add up. The zip includes an assembly sheet.</p>
@@ -204,10 +197,14 @@
     <label><span>Perimeters (walls)</span><input type="number" id="simWalls" value="3" min="1" max="10"></label>
     <label><span>Line width (mm)</span><input type="number" id="simLine" value="0.4" step="0.05" min="0.1"></label>
     <label><span>Infill (%)</span><input type="number" id="simInfill" value="15" min="0" max="100"></label>
+    <label><span>Print speed, walls / infill (mm/s)</span><span class="row"><input type="number" id="spdPerim" value="45" min="5" style="width:64px"><input type="number" id="spdInfill" value="80" min="5" style="width:64px"></span></label>
+    <label><span>Max flow (mm³/s, 0 = no cap)</span><input type="number" id="maxFlow" value="12" min="0" step="1"></label>
+    <label><span>Layer overhead (s)</span><input type="number" id="layerOverhead" value="1.5" min="0" step="0.1"></label>
+    <label><span>Solid bottom layers</span><input type="number" id="solidLayers" value="4" min="0" max="20"></label>
     <label><span>Sim speed (layers / s)</span><input type="number" id="simSpeed" value="4" step="1" min="0.1"></label>
     <div class="row"><button class="secondary" id="simPlay" disabled>Print</button><button class="secondary" id="simReset" disabled>Reset</button></div>
     <div class="stat" id="simStat" style="margin-top:8px"></div>
-    <p class="hint">Each layer is sliced from the real tile: the head traces the perimeters at the line width, then straight infill at the chosen density, alternating 45° per layer. A preview of the slicer's work, not its output — use your slicer for times.</p>
+    <p class="hint">Each layer is sliced from the real tile: the head traces the perimeters at the line width, then straight infill at the chosen density, alternating 45° per layer. A preview of the slicer's work, not its output. The time estimate samples these settings across the real slices and ignores acceleration and cooling — expect ±30 %.</p>
   </details>
 
   <details id="repairBox">

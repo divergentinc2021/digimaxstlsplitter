@@ -2,13 +2,14 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { planGrid } from './engine.js';
+import printersJson from './printers.json';
 
 const $ = (id) => document.getElementById(id);
 const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
 const PLA_G_PER_CM3 = 1.24;
 
 // ---------- persisted settings (bed, margin, dowels, view) ----------
-const SETTING_IDS = ['bedPreset', 'bx', 'by', 'bz', 'margin', 'dowel', 'dDia', 'dDepth', 'dZ', 'dPitch', 'filament', 'filamentColor', 'wire', 'gridMinor', 'gridMajor', 'layerH', 'simSpeed', 'simWalls', 'simLine', 'simInfill', 'hollow', 'hWall', 'hOpen', 'scale', 'up'];
+const SETTING_IDS = ['bedPreset', 'bx', 'by', 'bz', 'margin', 'dowel', 'dDia', 'dDepth', 'dZ', 'dPitch', 'filament', 'filamentColor', 'wire', 'gridMinor', 'gridMajor', 'layerH', 'simSpeed', 'simWalls', 'simLine', 'simInfill', 'spdPerim', 'spdInfill', 'solidLayers', 'maxFlow', 'layerOverhead', 'hollow', 'hWall', 'hOpen', 'scale', 'up'];
 function saveSettings() {
   try {
     const o = {}; for (const id of SETTING_IDS) { const el = $(id); o[id] = el.type === 'checkbox' ? el.checked : el.value; }
@@ -21,6 +22,8 @@ function loadSettings() {
     for (const id of SETTING_IDS) if (id in o) { const el = $(id); if (el.type === 'checkbox') el.checked = !!o[id]; else el.value = o[id]; }
   } catch {}
 }
+const PRINTERS = printersJson.printers;
+for (const p of PRINTERS) { const o = document.createElement('option'); o.value = p.id; o.textContent = `${p.name} · ${p.bed.join(' × ')}`; $('bedPreset').insertBefore(o, $('bedPreset').lastElementChild); }
 loadSettings();
 for (const id of SETTING_IDS) $(id).addEventListener('change', saveSettings);
 
@@ -134,13 +137,24 @@ $('theme').onclick = () => { const next = isDark() ? 'light' : 'dark'; document.
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
 // ---------- bed presets + live plan ----------
+function applyPrinter(p) {
+  $('bx').value = p.bed[0]; $('by').value = p.bed[1]; $('bz').value = p.bed[2];
+  $('spdPerim').value = p.wall; $('spdInfill').value = p.infill; $('maxFlow').value = p.maxFlow; $('layerOverhead').value = p.layerOverhead;
+  $('presetNote').textContent = `${p.name}: walls ${p.wall} / infill ${p.infill} mm/s, flow cap ${p.maxFlow} mm³/s. Source: ${p.source}. Edit any value to go custom.`;
+}
 $('bedPreset').onchange = () => {
-  const v = $('bedPreset').value; if (v === 'custom') return;
-  const [x, y, z] = v.split(','); $('bx').value = x; $('by').value = y; $('bz').value = z; saveSettings(); onBedChange();
+  const p = PRINTERS.find(x => x.id === $('bedPreset').value);
+  if (!p) { $('presetNote').textContent = 'Custom: set the bed and the print speeds yourself.'; saveSettings(); return; }
+  applyPrinter(p); saveSettings(); onBedChange(); requestEstimate();
 };
+/** Which profile matches every current value? None → Custom. */
 function syncPresetFromInputs() {
-  const v = bed().join(',');
-  $('bedPreset').value = [...$('bedPreset').options].some(o => o.value === v) ? v : 'custom';
+  const b = bed();
+  const matches = (x) => x.bed.join() === b.join() && +$('spdPerim').value === x.wall && +$('spdInfill').value === x.infill && +$('maxFlow').value === x.maxFlow;
+  const cur = PRINTERS.find(x => x.id === $('bedPreset').value);
+  const p = (cur && matches(cur)) ? cur : PRINTERS.find(matches); // several printers share a profile: keep the one chosen
+  $('bedPreset').value = p ? p.id : 'custom';
+  $('presetNote').textContent = p ? `${p.name}: walls ${p.wall} / infill ${p.infill} mm/s, flow cap ${p.maxFlow} mm³/s. Source: ${p.source}.` : 'Custom: bed and print speeds as entered below and under View & print simulation.';
 }
 function tilesOverride() { return ($('nx').value || $('ny').value) ? [+$('nx').value || null, +$('ny').value || null] : null; }
 function sizeFromInputs() { return [+$('sx').value, +$('sy').value, +$('sz').value]; }
@@ -164,6 +178,7 @@ function updatePlan() {
 }
 function onBedChange() { syncPresetFromInputs(); updatePlan(); if (model) { if (plateView && result) drawPlates(); else drawBed(model.bounds.size); } }
 for (const id of ['bx', 'by', 'bz', 'margin', 'nx', 'ny']) $(id).addEventListener('input', onBedChange);
+if (!localStorage.getItem('dm-settings')) { const p = PRINTERS[0]; applyPrinter(p); $('bedPreset').value = p.id; }
 syncPresetFromInputs();
 
 // ---------- scale (target overall size) ----------
@@ -323,6 +338,32 @@ function highlight(name) {
 const sim = { targets: [], playing: false, layer: 0, layers: 0, maxH: 0, lh: 0.2, frac: 0, t0: 0, pathZ: -1, pending: 0, seq: 0, paths: {}, lastReq: 0 };
 const pathGroup = new THREE.Group(); scene.add(pathGroup);
 function simOpts() { return { walls: Math.max(1, +$('simWalls').value || 3), lineWidth: Math.max(0.1, +$('simLine').value || 0.4), infill: Math.min(1, Math.max(0, (+$('simInfill').value || 0) / 100)) }; }
+// ---------- print estimate (sampled from real slices) ----------
+let estimateBusy = false, estimateDirty = false, estimates = null;
+const FILAMENT_MM2 = Math.PI * 1.75 * 1.75 / 4;
+const hms = (s) => { const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return h ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`; };
+function requestEstimate() {
+  if (!result) return;
+  if (estimateBusy) { estimateDirty = true; return; }
+  estimateBusy = true; estimateDirty = false;
+  $('estimate').innerHTML = statHtml([['Print time', '<span class="hint" style="margin:0">estimating from slices …</span>']]);
+  worker.postMessage({ type: 'estimate', opts: { ...simOpts(), layerHeight: Math.max(0.05, +$('layerH').value || 0.2), solidLayers: Math.max(0, +$('solidLayers').value || 0), perimeterSpeed: Math.max(5, +$('spdPerim').value || 45), infillSpeed: Math.max(5, +$('spdInfill').value || 80), maxFlow: Math.max(0, +$('maxFlow').value || 0), travelPerLayer: Math.max(0, +$('layerOverhead').value || 0) } });
+}
+function renderEstimate() {
+  if (!estimates || !result) return;
+  const per = result.tiles.map(t => ({ t, e: estimates[t.name] })).filter(x => x.e);
+  const total = per.reduce((s, x) => s + x.e.seconds, 0), mm3 = per.reduce((s, x) => s + x.e.mm3, 0);
+  const longest = per.reduce((a, x) => x.e.seconds > a.e.seconds ? x : a, per[0]);
+  const g = mm3 / 1000 * PLA_G_PER_CM3, metres = mm3 / FILAMENT_MM2 / 1000;
+  $('estimate').innerHTML = statHtml([
+    ['Print time', `<b style="color:var(--fg)">${hms(total)}</b> machine time over ${per.length} plates · longest ${label(longest.t.name)} ${hms(longest.e.seconds)}`],
+    ['In parallel', `${hms(longest.e.seconds)} on ${per.length} printers · ${hms(total / 2)} on 2 · ${hms(total / 4)} on 4`],
+    ['At', `${fmt(longest.e.wallSpeedUsed, 0)} / ${fmt(longest.e.infillSpeedUsed, 0)} mm/s walls / infill after the flow cap · ${$('bedPreset').selectedOptions[0]?.textContent.split(' · ')[0] || 'custom'}`],
+    ['Filament', `~${fmt(g, 0)} g PLA · ${fmt(metres, 1)} m of 1.75 mm · ${fmt(mm3 / 1000, 0)} cm³ extruded (${fmt(100 * mm3 / result.tileVolume, 0)} % of solid)`]
+  ]);
+  renderTable();
+}
+for (const id of ['simWalls', 'simLine', 'simInfill', 'layerH', 'spdPerim', 'spdInfill', 'solidLayers', 'maxFlow', 'layerOverhead']) $(id).addEventListener('change', () => { syncPresetFromInputs(); requestEstimate(); });
 /** Ask the worker for the current layer's toolpath (throttled; one in flight). */
 function requestLayer(z) {
   if (sim.pending && performance.now() - sim.lastReq < 1500) return;
@@ -424,11 +465,11 @@ function tileProblem(t) {
   return over.length ? 'too big — ' + over.join(', ') + ' mm' : 'closed';
 }
 function renderTable() {
-  const cols = [['name', 'Tile'], ['x', 'X'], ['y', 'Y'], ['z', 'Height'], ['vol', 'cm³'], ['audit', 'Audit']];
-  const rows = result.tiles.map(t => ({ t, name: t.name, x: t.bounds.size[0], y: t.bounds.size[1], z: t.bounds.size[2], vol: (t.shellVolume ?? t.volume) / 1000, audit: t.audit.ok && t.fitsBed ? 1 : 0 }));
+  const cols = [['name', 'Tile'], ['x', 'X'], ['y', 'Y'], ['z', 'Height'], ['vol', 'cm³'], ...(estimates ? [['hrs', 'Time']] : []), ['audit', 'Audit']];
+  const rows = result.tiles.map(t => ({ t, name: t.name, x: t.bounds.size[0], y: t.bounds.size[1], z: t.bounds.size[2], vol: (t.shellVolume ?? t.volume) / 1000, hrs: estimates?.[t.name]?.seconds ?? 0, audit: t.audit.ok && t.fitsBed ? 1 : 0 }));
   rows.sort((a, b) => ((a[sortKey] > b[sortKey]) - (a[sortKey] < b[sortKey])) * sortDir || (a.name > b.name ? 1 : -1));
-  $('tiles').innerHTML = '<tr>' + cols.map(([k, l]) => `<th data-k="${k}" class="${k === sortKey ? 'sorted' : ''}${['x', 'y', 'z', 'vol'].includes(k) ? ' num' : ''}">${l}${k === sortKey ? (sortDir > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('') + '</tr>'
-    + rows.map(r => `<tr data-name="${r.name}" class="${r.name === selected ? 'sel' : ''}"><td>${label(r.name)}</td><td class="num">${fmt(r.x)}</td><td class="num">${fmt(r.y)}</td><td class="num">${fmt(r.z)}</td><td class="num">${fmt(r.vol)}</td><td class="${r.audit ? 'ok' : 'bad'}">${tileProblem(r.t)}</td></tr>`).join('');
+  $('tiles').innerHTML = '<tr>' + cols.map(([k, l]) => `<th data-k="${k}" class="${k === sortKey ? 'sorted' : ''}${['x', 'y', 'z', 'vol', 'hrs'].includes(k) ? ' num' : ''}">${l}${k === sortKey ? (sortDir > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('') + '</tr>'
+    + rows.map(r => `<tr data-name="${r.name}" class="${r.name === selected ? 'sel' : ''}"><td>${label(r.name)}</td><td class="num">${fmt(r.x)}</td><td class="num">${fmt(r.y)}</td><td class="num">${fmt(r.z)}</td><td class="num">${fmt(r.vol)}</td>${estimates ? `<td class="num">${hms(r.hrs)}</td>` : ''}<td class="${r.audit ? 'ok' : 'bad'}">${tileProblem(r.t)}</td></tr>`).join('');
   $('tiles').querySelectorAll('th').forEach(th => th.onclick = () => { const k = th.dataset.k; if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = 1; } renderTable(); });
   $('tiles').querySelectorAll('tr[data-name]').forEach(tr => tr.onclick = () => highlight(tr.dataset.name === selected ? null : tr.dataset.name));
 }
@@ -447,7 +488,7 @@ function renderMinimap() {
 // ---------- worker replies ----------
 worker.onmessage = ({ data: d }) => {
   if (d.type === 'error') { msg(d.message, 'bad'); $('run').disabled = !model; $('applyScale').disabled = !model; return; }
-  if (d.type === 'progress') { $('run').firstElementChild.style.transform = `scaleX(${d.value})`; return; }
+  if (d.type === 'progress') { if (d.what !== 'estimate') $('run').firstElementChild.style.transform = `scaleX(${d.value})`; return; }
   if (d.type === 'loaded') {
     const first = !model || model.name !== d.name;
     model = d; model.asModelled = d.asModelled; model.scalePending = false; result = null; selected = null;
@@ -496,8 +537,10 @@ worker.onmessage = ({ data: d }) => {
       ['Tallest', `${label(tallest.name)} at ${fmt(tallest.bounds.size[2])} mm — needs a printer with Z ≥ that`],
       ['Dowel holes', d.holes]
     ]);
+    estimates = null; $('estimate').innerHTML = '';
     renderMinimap(); renderTable();
     $('resultBox').hidden = false;
+    requestEstimate();
     $('simPlay').disabled = $('simReset').disabled = false;
     $('dl').disabled = !d.allOk || !formatsPicked();
     $('run').disabled = false; $('run').firstElementChild.style.transform = 'scaleX(0)';
@@ -505,6 +548,11 @@ worker.onmessage = ({ data: d }) => {
     redraw();
     msg(d.allOk ? `Done — ${d.tiles.length} tiles.` : 'Some tiles failed. Adjust the plan and split again.', d.allOk ? 'ok' : 'bad');
     $('resultBox').scrollIntoView({ block: 'start', behavior: 'smooth' });
+    return;
+  }
+  if (d.type === 'estimate') {
+    estimates = d.tiles; estimateBusy = false; renderEstimate();
+    if (estimateDirty) requestEstimate();
     return;
   }
   if (d.type === 'layer') {

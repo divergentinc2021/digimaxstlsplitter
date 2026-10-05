@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="digimaxstlsplitter">
+  <!-- a solid slab being split into four printable tiles; gaps are the cuts -->
+  <defs>
+    <linearGradient id="top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7dd3fc"/><stop offset="1" stop-color="#38bdf8"/></linearGradient>
+  </defs>
+  <g transform="translate(32 34)">
+    <!-- back-left tile -->
+    <g transform="translate(-9 -8)">
+      <polygon points="0,-7 12,0 0,7 -12,0" fill="url(#top)"/>
+      <polygon points="-12,0 0,7 0,15 -12,8" fill="#0284c7"/>
+      <polygon points="0,7 12,0 12,8 0,15" fill="#0369a1"/>
+    </g>
+    <!-- back-right tile -->
+    <g transform="translate(9 -8)">
+      <polygon points="0,-7 12,0 0,7 -12,0" fill="url(#top)"/>
+      <polygon points="-12,0 0,7 0,15 -12,8" fill="#0284c7"/>
+      <polygon points="0,7 12,0 12,8 0,15" fill="#0369a1"/>
+    </g>
+    <!-- front-left tile -->
+    <g transform="translate(-9 8)">
+      <polygon points="0,-7 12,0 0,7 -12,0" fill="url(#top)"/>
+      <polygon points="-12,0 0,7 0,15 -12,8" fill="#0284c7"/>
+      <polygon points="0,7 12,0 12,8 0,15" fill="#0369a1"/>
+    </g>
+    <!-- front-right tile, with a relief bump = the terrain -->
+    <g transform="translate(9 8)">
+      <polygon points="0,-7 12,0 0,7 -12,0" fill="url(#top)"/>
+      <polygon points="-12,0 0,7 0,15 -12,8" fill="#0284c7"/>
+      <polygon points="0,7 12,0 12,8 0,15" fill="#0369a1"/>
+      <polygon points="-4,-2 0,-9 4,-3 1,-1 -2,-1" fill="#e0f2fe"/>
+    </g>
+    <!-- cut lines: the two saw kerfs -->
+    <path d="M-21,-8 L21,16 M21,-8 L-21,16" stroke="#f8fafc" stroke-width="1.6" stroke-linecap="round" opacity=".9"/>
+  </g>
+</svg>

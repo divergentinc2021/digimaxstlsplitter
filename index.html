@@ -5,9 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>digimaxstlsplitter</title>
 <meta name="description" content="Split a large STL / 3MF / GLB into printable, guaranteed-watertight tiles for your printer bed. Runs in your browser — nothing is uploaded.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f172a'/%3E%3Cpath d='M6 6h9v9H6zM17 6h9v9h-9zM6 17h9v9H6zM17 17h9v9h-9z' fill='%2338bdf8'/%3E%3C/svg%3E">
+<link rel="icon" href="./logo.svg" type="image/svg+xml">
+<script>try{const t=localStorage.getItem('dm-theme');if(t)document.documentElement.dataset.theme=t;}catch{}</script>
 <style>
-  :root { --bg:#0f172a; --panel:#1e293b; --line:#334155; --fg:#e2e8f0; --dim:#94a3b8; --acc:#38bdf8; --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; }
+  :root { --bg:#f1f5f9; --panel:#ffffff; --line:#cbd5e1; --fg:#0f172a; --dim:#64748b; --acc:#0284c7; --acc-fg:#ffffff; --ok:#15803d; --bad:#b91c1c; --warn:#b45309; --bed:#94a3b8; color-scheme: light; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#1e293b; --line:#334155; --fg:#e2e8f0; --dim:#94a3b8; --acc:#38bdf8; --acc-fg:#06202c; --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; --bed:#475569; color-scheme: dark; } }
+  :root[data-theme="dark"] { --bg:#0f172a; --panel:#1e293b; --line:#334155; --fg:#e2e8f0; --dim:#94a3b8; --acc:#38bdf8; --acc-fg:#06202c; --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; --bed:#475569; color-scheme: dark; }
   * { box-sizing: border-box; }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
   body { display:grid; grid-template-columns: 360px 1fr; grid-template-rows: 100vh; }
@@ -23,7 +26,7 @@
   input[type=checkbox] { accent-color: var(--acc); }
   .row { display:flex; gap:8px; }
   .row input[type=number] { width:72px; }
-  button { background:var(--acc); color:#06202c; border:0; border-radius:8px; padding:9px 12px; font:inherit; font-weight:600; cursor:pointer; }
+  button { background:var(--acc); color:var(--acc-fg); border:0; border-radius:8px; padding:9px 12px; font:inherit; font-weight:600; cursor:pointer; }
   button.secondary { background:var(--line); color:var(--fg); }
   button:disabled { opacity:.45; cursor:not-allowed; }
   .drop { border:2px dashed var(--line); border-radius:10px; padding:18px; text-align:center; color:var(--dim); cursor:pointer; }
@@ -45,7 +48,11 @@
 </head>
 <body>
 <aside>
-  <h1>digimaxstlsplitter <small>Cut a big model into watertight tiles. Nothing leaves your browser.</small></h1>
+  <div style="display:flex;align-items:center;gap:10px">
+    <img src="./logo.svg" alt="" width="44" height="44" style="flex:none">
+    <h1 style="flex:1">digimaxstlsplitter <small>Cut a big model into watertight tiles. Nothing leaves your browser.</small></h1>
+    <button class="secondary" id="theme" title="Toggle light / dark" style="padding:6px 9px" aria-label="Toggle theme">◐</button>
+  </div>
 
   <div class="drop" id="drop">Drop an <b>STL</b>, <b>3MF</b> or <b>GLB</b> here, or click to choose
     <input type="file" id="file" accept=".stl,.3mf,.glb" hidden></div>
@@ -84,6 +91,7 @@
     <div class="stat" id="resultStat"></div>
     <div class="row" style="margin-top:8px">
       <button id="dl" disabled>Download tiles (.zip)</button>
+      <button class="secondary" id="plates" title="Show every tile on its own printer bed">Plate view</button>
     </div>
     <label style="margin-top:6px">Include <span><label style="display:inline;margin:0"><input type="checkbox" id="fStl" checked> STL</label> &nbsp; <label style="display:inline;margin:0"><input type="checkbox" id="f3mf" checked> 3MF</label></span></label>
     <table id="tiles"></table>

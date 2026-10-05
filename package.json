@@ -1,7 +1,7 @@
 {
   "name": "digimaxstlsplitter",
   "version": "0.1.0",
-  "description": "Split a large STL/3MF/GLB into printable, guaranteed-watertight tiles for a given printer bed. Browser only, nothing uploaded.",
+  "description": "STL Splitter by Digimax — split a large STL/3MF/GLB into printable, guaranteed-watertight tiles for a given printer bed. Browser only, nothing uploaded.",
   "type": "module",
   "license": "MIT",
   "repository": "github:divergentinc2021/digimaxstlsplitter",

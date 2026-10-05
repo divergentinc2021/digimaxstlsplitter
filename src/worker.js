@@ -7,10 +7,16 @@ import { zipTiles, writeSTL, write3MF } from './export.js';
 
 let wasm;
 const ready = Module().then((w) => { w.setup(); wasm = w; });
-let source = null; // { mesh, name }
+let source = null; // { mesh, name, original: Float32Array positions as loaded, asModelled: size, note, dropped, factor }
 let last = null;   // last tile() result
 
 const post = (type, payload, transfer) => postMessage({ type, ...payload }, transfer || []);
+function postLoaded() {
+  const { mesh } = source;
+  post('loaded', { name: source.name, note: source.note, dropped: source.dropped, audit: audit(mesh), bounds: bounds(mesh), volume: volume(mesh),
+    asModelled: source.asModelled, scaleFactor: source.factor,
+    positions: mesh.positions.slice(0), indices: mesh.indices.slice(0) });
+}
 
 onmessage = async (e) => {
   await ready;
@@ -23,12 +29,16 @@ onmessage = async (e) => {
       orient(mesh, { scale: d.scale || 1, upAxis: d.upAxis || 'z' });
       const bb = bounds(mesh);
       if (d.baseToZero !== false) translate(mesh, [-bb.min[0], -bb.min[1], -bb.min[2]]);
-      const a = audit(mesh);
-      source = { mesh, name: d.name };
+      source = { mesh, name: d.name, original: mesh.positions.slice(0), asModelled: bounds(mesh).size, note: parsed.note, dropped: dd.dropped, factor: [1, 1, 1] };
       last = null;
-      post('loaded', { name: d.name, note: parsed.note, dropped: dd.dropped, audit: a, bounds: bounds(mesh), volume: volume(mesh),
-        positions: mesh.positions, indices: mesh.indices }, [mesh.positions.buffer.slice(0), mesh.indices.buffer.slice(0)]);
-      // transferring copies: keep our own
+      postLoaded();
+    } else if (d.type === 'scale') {
+      if (!source) throw new Error('No model loaded');
+      const f = d.factor;
+      const p = source.mesh.positions, o = source.original;
+      for (let i = 0; i < p.length; i += 3) { p[i] = o[i] * f[0]; p[i + 1] = o[i + 1] * f[1]; p[i + 2] = o[i + 2] * f[2]; }
+      source.factor = f; last = null;
+      postLoaded();
     } else if (d.type === 'tile') {
       if (!source) throw new Error('No model loaded');
       const r = tile(wasm, source.mesh, { ...d.opts, onProgress: (p) => post('progress', { value: p }) });

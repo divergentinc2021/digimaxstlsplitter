@@ -5,3 +5,4 @@ dist
 *.3mf
 *.glb
 !test/fixtures/*
+.impeccable/

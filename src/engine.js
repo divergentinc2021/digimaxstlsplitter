@@ -18,7 +18,7 @@ export function planGrid(size, bed, margin = 10, overrideTiles = null) {
   const usable = [bed[0] - 2 * margin, bed[1] - 2 * margin];
   const nx = overrideTiles?.[0] || Math.max(1, Math.ceil(size[0] / usable[0]));
   const ny = overrideTiles?.[1] || Math.max(1, Math.ceil(size[1] / usable[1]));
-  return { nx, ny, tile: [size[0] / nx, size[1] / ny], fitsHeight: size[2] <= bed[2] };
+  return { nx, ny, tile: [size[0] / nx, size[1] / ny], fitsHeight: size[2] <= bed[2], seams: (nx - 1) * ny + (ny - 1) * nx };
 }
 
 /**
@@ -72,7 +72,7 @@ export function tile(wasm, mesh, opts) {
   const tiles = [];
   const H = bb.size[2] + 20;
   let done = 0;
-  for (let i = 0; i < plan.nx; i++) for (let j = 0; j < plan.ny; j++) {
+  for (let j = 0; j < plan.ny; j++) for (let i = 0; i < plan.nx; i++) { // row-major: r1_c1, r1_c2, …
     const x0 = bb.min[0] + plan.tile[0] * i, y0 = bb.min[1] + plan.tile[1] * j;
     const box = Manifold.cube([plan.tile[0], plan.tile[1], H], false).translate([x0, y0, bb.min[2] - 10]);
     const t = solid.intersect(box); box.delete();

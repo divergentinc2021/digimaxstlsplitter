@@ -32,14 +32,17 @@ renderer.localClippingEnabled = true;
 const scene = new THREE.Scene();
 const isDark = () => matchMedia('(prefers-color-scheme: dark)').matches ? document.documentElement.dataset.theme !== 'light' : document.documentElement.dataset.theme === 'dark';
 const theme = () => isDark()
-  ? { bg: 0x0b1220, bed: 0x475569, plate: 0x151e2e, label: '#cbd5e1', model: 0xcbd5e1, wire: 0x0b1220, carriage: 0xe2e8f0 }
-  : { bg: 0xe2e8f0, bed: 0x64748b, plate: 0xf8fafc, label: '#1e293b', model: 0x8e9aab, wire: 0x1e293b, carriage: 0x1e293b };
+  ? { bg: 0x0b1220, bed: 0x5b6b80, plate: 0x151e2e, label: '#cbd5e1', model: 0xf2f2ee, wire: 0x0b1220, carriage: 0xe2e8f0 }
+  : { bg: 0xcfd8e3, bed: 0x64748b, plate: 0xf8fafc, label: '#1e293b', model: 0xf4f4f0, wire: 0x1e293b, carriage: 0x1e293b };
 const camera = new THREE.PerspectiveCamera(45, 1, 1, 100000);
 camera.up.set(0, 0, 1); // must precede OrbitControls: it snapshots camera.up in its constructor
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true; controls.dampingFactor = 0.08; controls.zoomToCursor = true; controls.screenSpacePanning = true;
-scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 1.1));
-const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(1, -1, 2); scene.add(sun);
+// Relief needs raking light: a low key from the front-left, a cooler fill from the opposite side, soft sky/ground ambient.
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a94a6, 0.55));
+const key = new THREE.DirectionalLight(0xfff4e6, 1.6); key.position.set(-1.2, -1.6, 0.9); scene.add(key);
+const fill = new THREE.DirectionalLight(0xdbe7ff, 0.7); fill.position.set(1.4, 0.8, 0.6); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xffffff, 0.35); rim.position.set(0.3, 1.5, 2.5); scene.add(rim);
 const group = new THREE.Group(); scene.add(group);         // tile / model meshes
 const plateGroup = new THREE.Group(); scene.add(plateGroup); // beds, grids, heads, labels
 let bedBox = null, plateView = false;
@@ -62,7 +65,7 @@ function addMesh(positions, indices, color, offset = [0, 0, 0]) {
   g0.setIndex(new THREE.BufferAttribute(indices, 1));
   // split normals at creases over 35° so cut faces and the rim chamfer stay crisp while terrain shades smoothly
   const g = toCreasedNormals(g0, THREE.MathUtils.degToRad(35));
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: .75, metalness: 0, side: THREE.DoubleSide }));
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: .62, metalness: 0, side: THREE.DoubleSide }));
   m.position.set(...offset);
   const wire = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ wireframe: true, color: theme().wire, transparent: true, opacity: .35, polygonOffset: true, polygonOffsetFactor: -1 }));
   wire.visible = $('wire').checked; wire.name = 'wire';

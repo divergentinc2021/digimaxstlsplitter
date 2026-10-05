@@ -8,6 +8,7 @@ const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'modu
 const canvas = $('view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.localClippingEnabled = true;
 const scene = new THREE.Scene();
 const isDark = () => matchMedia('(prefers-color-scheme: dark)').matches ? document.documentElement.dataset.theme !== 'light' : document.documentElement.dataset.theme === 'dark';
 const theme = () => isDark() ? { bg: 0x0f172a, bed: 0x475569, plate: 0x1e293b, label: '#94a3b8', model: 0xcbd5e1 } : { bg: 0xe2e8f0, bed: 0x64748b, plate: 0xf8fafc, label: '#334155', model: 0xb8c2cc };
@@ -26,7 +27,7 @@ function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (canvas.width !== w || canvas.height !== h) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 }
-(function loop() { resize(); controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+// render loop is started at the end of the module (after every const it touches exists)
 
 function clearView() { group.clear(); plateGroup.clear(); }
 function textSprite(txt, color) {
@@ -36,8 +37,84 @@ function textSprite(txt, color) {
   return sp;
 }
 /** Multi-printer sim: every tile centred on its own bed, beds laid out in a grid like a farm of printers. */
+function bedGrid(b, px, py, color) {
+  const minor = Math.max(1, +$('gridMinor').value || 10), major = Math.max(minor, +$('gridMajor').value || 50);
+  const pts = [], big = [];
+  const isMajor = (v) => Math.abs(v / major - Math.round(v / major)) < 1e-6;
+  for (let x = 0; x <= b[0] + 1e-6; x += minor) (isMajor(x) ? big : pts).push(px + x, py, 0, px + x, py + b[1], 0);
+  for (let y = 0; y <= b[1] + 1e-6; y += minor) (isMajor(y) ? big : pts).push(px, py + y, 0, px + b[0], py + y, 0);
+  const g = new THREE.Group();
+  const mk = (arr, op) => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3)); return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: op })); };
+  g.add(mk(pts, .18)); g.add(mk(big, .55));
+  return g;
+}
+/** Gantry + carriage + nozzle for one plate. Group origin = plate origin; carriage moves in plate coords. */
+function printHead(b, px, py) {
+  const g = new THREE.Group();
+  const gantry = new THREE.Mesh(new THREE.BoxGeometry(b[0] + 20, 8, 8), new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: .6 }));
+  gantry.position.set(b[0] / 2, 0, 14); g.add(gantry);
+  const carriage = new THREE.Mesh(new THREE.BoxGeometry(22, 22, 18), new THREE.MeshStandardMaterial({ color: isDark() ? 0xe2e8f0 : 0x1e293b, roughness: .5 }));
+  carriage.position.set(0, 0, 10); g.add(carriage);
+  const nozzle = new THREE.Mesh(new THREE.ConeGeometry(3, 6, 12), new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: .6, roughness: .3 }));
+  nozzle.rotation.x = Math.PI; nozzle.position.set(0, 0, -11); carriage.add(nozzle);
+  g.userData = { gantry, carriage };
+  g.position.set(px, py, 0); g.visible = false;
+  plateGroup.add(g);
+  return g;
+}
+// ---------- print simulation (layers reveal bottom-up, head sweeps each layer) ----------
+const sim = { targets: [], playing: false, layer: 0, layers: 0, maxH: 0, lh: 0.2, frac: 0, t0: 0 };
+function simSetup() {
+  sim.lh = Math.max(0.05, +$('layerH').value || 0.2);
+  sim.maxH = sim.targets.length ? Math.max(...sim.targets.map(t => t.tile.bounds.size[2])) : 0;
+  sim.layers = Math.ceil(sim.maxH / sim.lh); sim.layer = 0; sim.frac = 0;
+  simApply();
+}
+function simApply() {
+  const z = sim.layer * sim.lh, active = sim.playing || sim.layer > 0;
+  const b = bed();
+  for (const { mesh, tile, head } of sim.targets) {
+    const h = tile.bounds.size[2], done = z >= h;
+    mesh.material.clippingPlanes = active && !done ? [new THREE.Plane(new THREE.Vector3(0, 0, -1), z)] : [];
+    mesh.visible = !active || sim.layer > 0;
+    head.visible = active && !done;
+    if (head.visible) {
+      const s = tile.bounds.size, ox = (b[0] - s[0]) / 2, oy = (b[1] - s[1]) / 2;
+      const rows = 6, r = Math.min(rows - 1, Math.floor(sim.frac * rows)), u = (sim.frac * rows) % 1;
+      const x = ox + s[0] * (r % 2 ? 1 - u : u), y = oy + s[1] * (r + 0.5) / rows;
+      head.position.z = z + 1;
+      head.userData.gantry.position.y = y;
+      head.userData.carriage.position.set(x, y, 10);
+    }
+  }
+  const z0 = Math.min(z, sim.maxH);
+  $('simStat').innerHTML = statHtml([
+    ['Layer', `${Math.min(sim.layer, sim.layers)} / ${sim.layers}`],
+    ['Height', `${z0.toFixed(2)} / ${sim.maxH.toFixed(2)} mm`],
+    ['Plates still printing', sim.targets.filter(t => z < t.tile.bounds.size[2]).length + ' / ' + sim.targets.length]
+  ]);
+}
+function simTick(now) {
+  if (!sim.playing) return;
+  const perLayer = 1000 / Math.max(0.1, +$('simSpeed').value || 4);
+  const elapsed = now - sim.t0;
+  sim.layer = Math.floor(elapsed / perLayer); sim.frac = (elapsed % perLayer) / perLayer;
+  if (sim.layer >= sim.layers) { sim.layer = sim.layers; sim.frac = 0; sim.playing = false; $('simPlay').textContent = '▶ Print again'; }
+  simApply();
+}
+$('simPlay').onclick = () => {
+  if (!result) return;
+  if (!plateView) { plateView = true; $('plates').textContent = 'Model view'; redraw(); }
+  if (sim.playing) { sim.playing = false; $('simPlay').textContent = '▶ Resume'; simApply(); return; }
+  if (sim.layers === 0 || sim.layer >= sim.layers) simSetup();
+  const perLayer = 1000 / Math.max(0.1, +$('simSpeed').value || 4);
+  sim.t0 = performance.now() - (sim.layer + sim.frac) * perLayer;
+  sim.playing = true; $('simPlay').textContent = '⏸ Pause';
+};
+$('simReset').onclick = () => { sim.playing = false; $('simPlay').textContent = '▶ Print'; simSetup(); };
+for (const id of ['gridMinor', 'gridMajor']) $(id).oninput = () => plateView && result && drawPlates();
 function drawPlates() {
-  clearView();
+  clearView(); sim.targets = []; sim.playing = false; sim.layer = 0; sim.layers = 0; sim.frac = 0; $('simPlay').textContent = '▶ Print'; $('simStat').innerHTML = '';
   const b = bed(), t = theme();
   const n = result.tiles.length, cols = Math.ceil(Math.sqrt(n)), gap = Math.max(b[0], b[1]) * 0.25;
   const plateGeo = new THREE.PlaneGeometry(b[0], b[1]), edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(b[0], b[1], b[2]));
@@ -45,11 +122,11 @@ function drawPlates() {
     const px = (i % cols) * (b[0] + gap), py = -Math.floor(i / cols) * (b[1] + gap);
     const plate = new THREE.Mesh(plateGeo, new THREE.MeshStandardMaterial({ color: t.plate, roughness: 1 }));
     plate.position.set(px + b[0] / 2, py + b[1] / 2, -0.5); plateGroup.add(plate);
-    const grid = new THREE.GridHelper(Math.max(b[0], b[1]), Math.round(Math.max(b[0], b[1]) / 10), t.bed, t.bed);
-    grid.rotation.x = Math.PI / 2; grid.position.set(px + b[0] / 2, py + b[1] / 2, 0); grid.material.opacity = .25; grid.material.transparent = true; plateGroup.add(grid);
+    plateGroup.add(bedGrid(b, px, py, t.bed));
     const box = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: t.bed })); box.position.set(px + b[0] / 2, py + b[1] / 2, b[2] / 2); plateGroup.add(box);
     const s = tile.bounds.size;
-    addMesh(tile.positions, tile.indices, palette[i % palette.length], [px + (b[0] - s[0]) / 2, py + (b[1] - s[1]) / 2, 0]);
+    const mesh = addMesh(tile.positions, tile.indices, filamentColor(i), [px + (b[0] - s[0]) / 2, py + (b[1] - s[1]) / 2, 0]);
+    sim.targets.push({ mesh, tile, head: printHead(b, px, py) });
     const lab = textSprite(tile.name.replace('tile_', '').toUpperCase(), tile.audit.ok && tile.fitsBed ? t.label : '#ef4444');
     lab.position.set(px + b[0] / 2, py - 12, 2); lab.scale.set(b[0] * .5, b[0] * .125, 1); plateGroup.add(lab);
   });
@@ -61,7 +138,8 @@ function drawPlates() {
 function drawTiles() {
   clearView();
   const p = result.plan;
-  result.tiles.forEach((t, i) => addMesh(t.positions, t.indices, palette[i % palette.length], [t.bounds.origin[0], t.bounds.origin[1], t.bounds.origin[2]]));
+  sim.targets = []; sim.playing = false; sim.layers = 0; $('simStat').innerHTML = '';
+  result.tiles.forEach((t, i) => addMesh(t.positions, t.indices, filamentColor(i), [t.bounds.origin[0], t.bounds.origin[1], t.bounds.origin[2]]));
   drawBed(model.bounds.size);
 }
 function redraw() {
@@ -74,11 +152,24 @@ function addMesh(positions, indices, color, offset = [0, 0, 0]) {
   g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   g.setIndex(new THREE.BufferAttribute(indices, 1));
   g.computeVertexNormals();
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: .75, metalness: 0, flatShading: false }));
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: .75, metalness: 0, side: THREE.DoubleSide }));
   m.position.set(...offset);
   group.add(m);
   return m;
 }
+// ---------- filament colour ----------
+function filamentColor(i) {
+  const v = $('filament').value;
+  if (v === 'per-tile') return palette[i % palette.length];
+  if (v === 'custom') return new THREE.Color($('filamentColor').value).getHex();
+  return new THREE.Color(v).getHex();
+}
+function applyFilament() {
+  if (!result) return;
+  group.children.forEach((m, i) => { if (m.isMesh) m.material.color.setHex(filamentColor(i)); });
+}
+$('filament').onchange = () => { $('customRow').hidden = $('filament').value !== 'custom'; applyFilament(); };
+$('filamentColor').oninput = applyFilament;
 function frame(size) {
   const r = Math.hypot(...size) * 0.75;
   camera.position.set(size[0] / 2 + r * 0.9, size[1] / 2 - r * 1.1, size[2] + r * 0.8);
@@ -181,6 +272,7 @@ worker.onmessage = ({ data: d }) => {
     $('tiles').innerHTML = '<tr><th>Tile</th><th>Size mm</th><th>Tris</th><th>Audit</th></tr>' + d.tiles.map(t =>
       `<tr><td>${t.name}</td><td>${t.bounds.size.map(v => fmt(v)).join(' × ')}</td><td>${t.audit.triangles.toLocaleString()}</td><td class="${t.audit.ok && t.fitsBed ? 'ok' : 'bad'}">${t.audit.ok ? (t.fitsBed ? 'closed' : 'too big') : `${t.audit.open} open / ${t.audit.nonManifold} nm`}</td></tr>`).join('');
     $('resultBox').hidden = false;
+    $('simPlay').disabled = $('simReset').disabled = false;
     $('dl').disabled = !d.allOk;
     $('run').disabled = false;
     msg(d.allOk ? `Done: ${d.tiles.length} tiles, all closed, volumes match.` : 'Some tiles failed — download is blocked. Change the grid or margin and try again.', d.allOk ? 'ok' : 'bad');
@@ -205,3 +297,4 @@ function drawBed(size) {
 }
 for (const id of ['bx', 'by', 'bz']) $(id).oninput = () => model && (plateView ? drawPlates() : drawBed(model.bounds.size));
 applyTheme();
+(function loop(now) { resize(); controls.update(); simTick(now || 0); renderer.render(scene, camera); requestAnimationFrame(loop); })();

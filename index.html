@@ -98,6 +98,28 @@
   </fieldset>
 
   <fieldset>
+    <legend>Plate view &amp; print simulation</legend>
+    <label>Bed grid step (mm) <span class="row"><input type="number" id="gridMinor" value="10" min="1"><input type="number" id="gridMajor" value="50" min="1"></span></label>
+    <label>Filament <select id="filament">
+      <option value="per-tile">Per-tile colours</option>
+      <option value="#f4f4f0" selected>White PLA</option>
+      <option value="#1b1b1b">Black</option>
+      <option value="#8d8d8d">Grey</option>
+      <option value="#c0392b">Red</option>
+      <option value="#2471a3">Blue</option>
+      <option value="#f1c40f">Yellow</option>
+      <option value="#d4a017">Wood / tan</option>
+      <option value="custom">Custom…</option>
+    </select></label>
+    <label id="customRow" hidden>Custom colour <input type="color" id="filamentColor" value="#38bdf8"></label>
+    <label>Layer height (mm) <input type="number" id="layerH" value="0.2" step="0.05" min="0.05"></label>
+    <label>Sim speed (layers / s) <input type="number" id="simSpeed" value="4" step="1" min="0.1"></label>
+    <div class="row"><button class="secondary" id="simPlay" disabled>▶ Print</button><button class="secondary" id="simReset" disabled>Reset</button></div>
+    <div class="stat" id="simStat"></div>
+    <p class="hint">Simulation only: layers reveal bottom-up on every plate at once with a head sweeping each layer. Not a real toolpath — use your slicer for times.</p>
+  </fieldset>
+
+  <fieldset>
     <legend>Repaired source</legend>
     <p class="hint">Download the loaded model re-exported as a single closed solid (welded, degenerates dropped, base on z=0).</p>
     <div class="row"><button class="secondary" id="srcStl" disabled>STL</button><button class="secondary" id="src3mf" disabled>3MF</button></div>

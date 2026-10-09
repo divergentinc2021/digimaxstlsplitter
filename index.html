@@ -114,6 +114,13 @@
       <label><span>Keep proportions</span><input type="checkbox" id="lockAspect" checked></label>
       <div class="row"><button class="secondary" id="applyScale" disabled>Apply size</button><button class="secondary" id="resetScale" disabled>As modelled</button></div>
       <p class="hint" id="scaleNote">Type a new width to scale the whole piece. The tile plan below updates as you type.</p>
+      <label style="margin-top:10px"><span>Rotate</span><span class="row"><select id="rotAxis" style="min-width:70px;max-width:90px"><option value="x">about X</option><option value="y">about Y</option><option value="z" selected>about Z</option></select><input type="number" id="rotDeg" value="90" step="15" style="width:72px"></span></label>
+      <div class="row">
+        <button class="secondary" id="rotMinus" disabled>↺ Rotate −</button>
+        <button class="secondary" id="rotPlus" disabled>↻ Rotate +</button>
+        <button class="secondary" id="rotReset" disabled>Reset rotation</button>
+      </div>
+      <p class="hint">Lay the model on its best face first: the base goes on z = 0 after every rotation, and the plan recomputes. X / Y tip it over, Z turns it on the bed.</p>
     </div>
     <details id="unitsBox" style="margin-top:8px;border:0;padding:0">
       <summary style="font-weight:500;color:var(--dim);font-size:12px">File units &amp; up axis</summary>

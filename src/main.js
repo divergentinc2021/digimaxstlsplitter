@@ -204,6 +204,16 @@ $('applyScale').onclick = () => {
   worker.postMessage({ type: 'scale', factor: k });
 };
 $('resetScale').onclick = () => { if (!model) return; worker.postMessage({ type: 'scale', factor: [1, 1, 1] }); };
+// ---------- rotate (relative, about world axes) ----------
+function rotate(sign) {
+  if (!model) return;
+  const deg = sign * (Math.abs(+$('rotDeg').value) || 90);
+  msg(`Rotating ${deg > 0 ? '+' : ''}${deg}° about ${$('rotAxis').value.toUpperCase()} …`);
+  worker.postMessage({ type: 'rotate', axis: $('rotAxis').value, deg });
+}
+$('rotPlus').onclick = () => rotate(1);
+$('rotMinus').onclick = () => rotate(-1);
+$('rotReset').onclick = () => { if (!model) return; worker.postMessage({ type: 'rotate', reset: true }); };
 
 // ---------- load ----------
 async function load(file) {
@@ -496,7 +506,7 @@ worker.onmessage = ({ data: d }) => {
     const scaled = d.scaleFactor.some(v => Math.abs(v - 1) > 1e-9);
     $('modelBox').hidden = false; $('drop').innerHTML = `<b>${d.name}</b> — drop another file to replace`;
     $('modelStat').innerHTML = statHtml([
-      ['Size', `${fmt(s[0])} × ${fmt(s[1])} × ${fmt(s[2])} mm` + (scaled ? ` <span class="hint" style="margin:0">(${d.scaleFactor.map(v => fmt(v * 100, 1)).join(' / ')} % of modelled)</span>` : '')],
+      ['Size', `${fmt(s[0])} × ${fmt(s[1])} × ${fmt(s[2])} mm` + (scaled ? ` <span class="hint" style="margin:0">(${d.scaleFactor.map(v => fmt(v * 100, 1)).join(' / ')} % of modelled)</span>` : '') + (d.rotated ? ' <span class="hint" style="margin:0">(rotated)</span>' : '')],
       ['Volume', `${fmt(d.volume / 1000)} cm³ · ~${fmt(d.volume / 1000 * PLA_G_PER_CM3 / 1000, 1)} kg solid PLA`],
       ['Triangles', a.triangles.toLocaleString() + (d.dropped ? ` <span class="warn">(${d.dropped} zero-area dropped)</span>` : '')],
       ['Topology', a.ok ? `<span class="ok">closed — every edge shared by two faces, ${a.shells} shell${a.shells > 1 ? 's' : ''}</span>`
@@ -504,13 +514,14 @@ worker.onmessage = ({ data: d }) => {
     ]);
     $('modelNote').textContent = d.note;
     setSizeInputs(s); $('applyScale').disabled = true; $('resetScale').disabled = !scaled;
+    $('rotPlus').disabled = $('rotMinus').disabled = false; $('rotReset').disabled = !d.rotated;
     $('scaleNote').textContent = 'Type a new width to scale the whole piece. The tile plan below updates as you type.';
     plateView = false; $('plates').textContent = 'Plate view'; $('simPlay').disabled = $('simReset').disabled = true;
     redraw(); frame(s);
     $('srcStl').disabled = $('src3mf').disabled = !a.ok;
     $('resultBox').hidden = true; $('minimap').innerHTML = ''; $('tiles').innerHTML = '';
     updatePlan(); setStep(a.ok ? 2 : 1);
-    msg(a.ok ? (first ? 'Model is closed. Check the bed, then split.' : 'Scaled and re-audited. Check the plan, then split.')
+    msg(a.ok ? (first ? 'Model is closed. Check the bed, then split.' : 'Re-oriented and re-audited. Check the plan, then split.')
              : 'This mesh is not a closed solid, so it cannot be cut — cutting an open mesh only makes more open edges. Repair it in your CAD tool or remesh it, then load it again.', a.ok ? 'ok' : 'bad');
     if (first) $('s2').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     return;

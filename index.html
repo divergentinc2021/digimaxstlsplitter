@@ -100,11 +100,12 @@
 
   <section id="s1" class="active">
     <h2><span class="step">1</span>Model</h2>
-    <div class="drop" id="drop">Drop an <b>STL</b>, <b>3MF</b> or <b>GLB</b> here, or click to choose
-      <input type="file" id="file" accept=".stl,.3mf,.glb" hidden></div>
+    <div class="drop" id="drop"><span id="dropText">Drop an <b>STL</b>, <b>3MF</b> or <b>GLB</b> here, or click to choose</span></div>
+    <input type="file" id="file" accept=".stl,.3mf,.glb" hidden>
     <div id="modelBox" hidden>
       <div class="stat" id="modelStat"></div>
       <p class="hint" id="modelNote"></p>
+      <div class="row" style="margin-top:8px"><button class="secondary" id="reload">Load another model…</button></div>
       <label style="margin-top:10px"><span>Overall size (mm)</span></label>
       <div class="xyz" id="sizeRow">
         <span data-axis="X"><input type="number" id="sx" step="1" min="1"></span>

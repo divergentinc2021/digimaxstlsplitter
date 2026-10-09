@@ -223,8 +223,9 @@ async function load(file) {
   worker.postMessage({ type: 'load', name: file.name, buffer, scale: +$('scale').value, upAxis: $('up').value }, [buffer]);
 }
 window.dmLoad = load; // used by tests
-$('file').onchange = (e) => e.target.files[0] && load(e.target.files[0]);
+$('file').onchange = (e) => { if (e.target.files[0]) load(e.target.files[0]); e.target.value = ''; }; // clear so the same file can be re-picked
 $('drop').onclick = () => $('file').click();
+$('reload').onclick = () => $('file').click();
 for (const ev of ['dragenter', 'dragover']) $('drop').addEventListener(ev, (e) => { e.preventDefault(); $('drop').classList.add('over'); });
 for (const ev of ['dragleave', 'drop']) $('drop').addEventListener(ev, (e) => { e.preventDefault(); $('drop').classList.remove('over'); });
 $('drop').addEventListener('drop', (e) => e.dataTransfer.files[0] && load(e.dataTransfer.files[0]));
@@ -504,7 +505,7 @@ worker.onmessage = ({ data: d }) => {
     model = d; model.asModelled = d.asModelled; model.scalePending = false; result = null; selected = null;
     const a = d.audit, s = d.bounds.size;
     const scaled = d.scaleFactor.some(v => Math.abs(v - 1) > 1e-9);
-    $('modelBox').hidden = false; $('drop').innerHTML = `<b>${d.name}</b> — drop another file to replace`;
+    $('modelBox').hidden = false; $('dropText').innerHTML = `<b>${d.name}</b> — drop another file here, or click, to replace it`;
     $('modelStat').innerHTML = statHtml([
       ['Size', `${fmt(s[0])} × ${fmt(s[1])} × ${fmt(s[2])} mm` + (scaled ? ` <span class="hint" style="margin:0">(${d.scaleFactor.map(v => fmt(v * 100, 1)).join(' / ')} % of modelled)</span>` : '') + (d.rotated ? ' <span class="hint" style="margin:0">(rotated)</span>' : '')],
       ['Volume', `${fmt(d.volume / 1000)} cm³ · ~${fmt(d.volume / 1000 * PLA_G_PER_CM3 / 1000, 1)} kg solid PLA`],

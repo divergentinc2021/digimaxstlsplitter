@@ -5,14 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>STL Splitter by Digimax</title>
 <meta name="description" content="Split a large STL / 3MF / GLB into printable, guaranteed-watertight tiles for your printer bed. Runs in your browser — nothing is uploaded.">
-<link rel="icon" href="./logo.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="theme-color" content="#E3262E">
+<link rel="canonical" href="https://stlsplit.digimax.mu/">
+<meta property="og:title" content="STL Splitter by Digimax">
+<meta property="og:url" content="https://stlsplit.digimax.mu/">
 <script>try{const t=localStorage.getItem('dm-theme');if(t)document.documentElement.dataset.theme=t;}catch{}</script>
 <style>
-  :root { --bg:#eef2f6; --panel:#ffffff; --line:#cfd8e3; --fg:#0f172a; --dim:#5b6b7f; --acc:#0369a1; --acc-fg:#ffffff; --acc-soft:#e0f2fe; --ok:#15803d; --ok-soft:#dcfce7; --bad:#b91c1c; --bad-soft:#fee2e2; --warn:#b45309; --bed:#94a3b8; --sel:#bae6fd; --shadow: 0 1px 2px rgba(15,23,42,.06), 0 8px 24px -12px rgba(15,23,42,.25); color-scheme: light; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0b1220; --panel:#151e2e; --line:#2b3a4f; --fg:#e6edf5; --dim:#94a3b8; --acc:#38bdf8; --acc-fg:#06202c; --acc-soft:#0c2a3d; --ok:#4ade80; --ok-soft:#0f2e1c; --bad:#f87171; --bad-soft:#3a1414; --warn:#fbbf24; --bed:#475569; --sel:#1e3a52; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6); color-scheme: dark; } }
-  :root[data-theme="dark"] { --bg:#0b1220; --panel:#151e2e; --line:#2b3a4f; --fg:#e6edf5; --dim:#94a3b8; --acc:#38bdf8; --acc-fg:#06202c; --acc-soft:#0c2a3d; --ok:#4ade80; --ok-soft:#0f2e1c; --bad:#f87171; --bad-soft:#3a1414; --warn:#fbbf24; --bed:#475569; --sel:#1e3a52; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6); color-scheme: dark; }
+  @font-face { font-family:Outfit; src:url(./fonts/Outfit-Regular.ttf) format("truetype"); font-weight:400; font-display:swap; }
+  @font-face { font-family:Outfit; src:url(./fonts/Outfit-Bold.ttf) format("truetype"); font-weight:600 700; font-display:swap; }
+  :root { --bg:#f4f3f1; --panel:#ffffff; --line:#e4e2de; --fg:#111111; --dim:#5a5a5a; --acc:#e3262e; --acc-fg:#ffffff; --acc-soft:#fde8e8; --ok:#15803d; --ok-soft:#dcfce7; --bad:#9b1c1c; --bad-soft:#fbe4e4; --warn:#b45309; --bed:#9a9690; --sel:#f9caca; --shadow: 0 1px 2px rgba(17,17,17,.06), 0 8px 24px -12px rgba(17,17,17,.22); color-scheme: light; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#121212; --panel:#1b1b1b; --line:#323130; --fg:#f0efec; --dim:#a8a6a1; --acc:#f0454c; --acc-fg:#ffffff; --acc-soft:#3a1517; --ok:#4ade80; --ok-soft:#0f2e1c; --bad:#ff7a70; --bad-soft:#3a1414; --warn:#fbbf24; --bed:#55524e; --sel:#5a1d20; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6); color-scheme: dark; } }
+  :root[data-theme="dark"] { --bg:#121212; --panel:#1b1b1b; --line:#323130; --fg:#f0efec; --dim:#a8a6a1; --acc:#f0454c; --acc-fg:#ffffff; --acc-soft:#3a1517; --ok:#4ade80; --ok-soft:#0f2e1c; --bad:#ff7a70; --bad-soft:#3a1414; --warn:#fbbf24; --bed:#55524e; --sel:#5a1d20; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6); color-scheme: dark; }
   * { box-sizing: border-box; }
-  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.45 Outfit, system-ui, -apple-system, "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
   ::selection { background: var(--sel); }
   body { display:grid; grid-template-columns: 384px 1fr; grid-template-rows: 100vh; }
   aside { background:var(--panel); border-right:1px solid var(--line); overflow:auto; padding:16px 16px 28px; display:flex; flex-direction:column; gap:12px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
@@ -23,6 +30,11 @@
   h1 { font-size:22px; line-height:1.15; margin:0; letter-spacing:-.01em; flex:1; }
   h1 small { display:block; color:var(--dim); font-weight:400; font-size:12px; letter-spacing:0; margin-top:2px; }
   h1 em { font-style:normal; color:var(--dim); font-weight:500; }
+  h1 .brand { color:var(--acc); text-decoration:none; font-weight:700; }
+  h1 .brand:hover { text-decoration:underline; }
+  .madeby { margin-top:auto; padding-top:14px; border-top:1px solid var(--line); font-size:12px; color:var(--dim); display:flex; gap:8px; align-items:center; }
+  .madeby img { width:20px; height:20px; }
+  .madeby a { color:var(--fg); font-weight:600; text-decoration:none; }
   .iconbtn { background:transparent; border:1px solid var(--line); color:var(--fg); width:34px; height:34px; border-radius:8px; display:grid; place-items:center; cursor:pointer; padding:0; }
   .iconbtn:hover { background:var(--acc-soft); }
   .iconbtn svg { width:18px; height:18px; }
@@ -92,7 +104,7 @@
 <aside>
   <header>
     <img src="./logo.svg" alt="">
-    <h1>STL Splitter <em>by Digimax</em><small>Cut a big model into watertight tiles. Nothing leaves your browser.</small></h1>
+    <h1>STL Splitter <em>by <a href="https://digimax.mu" target="_blank" rel="noopener" class="brand">Digimax</a></em><small>Cut a big model into watertight tiles. Nothing leaves your browser.</small></h1>
     <button class="iconbtn" id="theme" title="Toggle light / dark" aria-label="Toggle light or dark theme">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M5.3 18.7l1.5-1.5M17.2 6.8l1.5-1.5"/></svg>
     </button>
@@ -222,6 +234,7 @@
   </details>
 
   <p class="hint">Why this works when other splitters don't: tiles are cut with <a href="https://github.com/elalish/manifold" target="_blank" rel="noopener">Manifold</a> booleans, so cut faces are always closed — then every tile is independently audited and the volumes must add up before you can download. <a href="https://github.com/divergentinc2021/digimaxstlsplitter" target="_blank" rel="noopener">Source (MIT)</a></p>
+  <footer class="madeby"><img src="./logo.svg" alt=""><span>Built in-house by <a href="https://digimax.mu" target="_blank" rel="noopener">Digimax</a> · Every format. One studio.</span></footer>
 </aside>
 <main>
   <canvas id="view"></canvas>

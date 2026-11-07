@@ -35,8 +35,8 @@ renderer.localClippingEnabled = true;
 const scene = new THREE.Scene();
 const isDark = () => matchMedia('(prefers-color-scheme: dark)').matches ? document.documentElement.dataset.theme !== 'light' : document.documentElement.dataset.theme === 'dark';
 const theme = () => isDark()
-  ? { bg: 0x0b1220, bed: 0x5b6b80, plate: 0x151e2e, label: '#cbd5e1', model: 0xf2f2ee, wire: 0x0b1220, carriage: 0xe2e8f0 }
-  : { bg: 0xcfd8e3, bed: 0x64748b, plate: 0xf8fafc, label: '#1e293b', model: 0xf4f4f0, wire: 0x1e293b, carriage: 0x1e293b };
+  ? { bg: 0x161616, bed: 0x5e5a55, plate: 0x1f1e1d, label: '#d6d4cf', model: 0xf2f2ee, wire: 0x111111, carriage: 0xe7e5e1 }
+  : { bg: 0xdcdad6, bed: 0x6f6b66, plate: 0xfafafa, label: '#1d1d1d', model: 0xf4f4f0, wire: 0x1d1d1d, carriage: 0x1d1d1d };
 const camera = new THREE.PerspectiveCamera(45, 1, 1, 100000);
 camera.up.set(0, 0, 1); // must precede OrbitControls: it snapshots camera.up in its constructor
 const controls = new OrbitControls(camera, canvas);
@@ -340,7 +340,7 @@ for (const id of ['gridMinor', 'gridMajor']) $(id).oninput = () => plateView && 
 
 function highlight(name) {
   selected = name;
-  group.children.forEach(m => { if (m.isMesh) { m.material.emissive.setHex(m.name === name ? 0x2563eb : 0x000000); m.material.emissiveIntensity = .45; } });
+  group.children.forEach(m => { if (m.isMesh) { m.material.emissive.setHex(m.name === name ? 0xe3262e : 0x000000); m.material.emissiveIntensity = .45; } });
   document.querySelectorAll('#minimap button').forEach(b => b.classList.toggle('sel', b.dataset.name === name));
   document.querySelectorAll('#tiles tr').forEach(r => r.classList.toggle('sel', r.dataset.name === name));
 }
@@ -408,7 +408,7 @@ function drawLayerPaths(z, tiles) {
     for (let i = 0; i < L.infill.length; i += 4) fill.push(ox + L.infill[i], oy + L.infill[i + 1], z + 0.05, ox + L.infill[i + 2], oy + L.infill[i + 3], z + 0.05);
     const mk = (arr, color, op) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3)); return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: op, depthTest: false })); };
     if (perim.length) pathGroup.add(mk(perim, 0xf59e0b, .95));
-    if (fill.length) pathGroup.add(mk(fill, isDark() ? 0x38bdf8 : 0x0369a1, .6));
+    if (fill.length) pathGroup.add(mk(fill, isDark() ? 0xf0454c : 0xe3262e, .6));
     sim.paths[tile.name] = buildTrack(L);
   }
   sim.pathZ = z;

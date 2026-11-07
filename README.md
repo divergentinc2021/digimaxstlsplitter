@@ -3,7 +3,7 @@
 `digimaxstlsplitter` on GitHub / Cloudflare.
 
 Split a large STL / 3MF / GLB into printable, **guaranteed-watertight** tiles for a given printer bed.
-Runs entirely in the browser — nothing is uploaded. **Live: https://digimaxstlsplitter.pages.dev**
+Runs entirely in the browser — nothing is uploaded. **Live: https://stlsplit.digimax.mu**
 
 ## Why another splitter
 
